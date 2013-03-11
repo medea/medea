@@ -1,0 +1,15 @@
+{
+  "name": "medea",
+  "version": "0.0.0",
+  "description": "Key-value store.",
+  "main": "medea.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": "",
+  "author": "Kevin Swiber <kswiber@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "crc32": "~0.2.2"
+  }
+}
