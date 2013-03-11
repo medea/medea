@@ -61,7 +61,7 @@ Medea.prototype.open = function(dir, cb) {
   }
 
   this.active = new FileInfo();
-  this.active.filename =  dir + '/' + Date.now().toString() + '.data';
+  this.active.filename =  dir + '/' + Date.now().toString() + '.medea.data';
 
   dir = __dirname + '/' + dir;
   var that = this;
@@ -122,7 +122,7 @@ Medea.prototype._put = function(k, v, offset, cb) {
   this._write(line, offset);
 
   var entry = new KeyDirEntry();
-  entry.fileId = this.active.filename;
+  entry.fileId = this._fileTimestamp(this.active.filename);
   entry.valueSize = value.length;
   entry.valuePosition = offset + sizes.crc 
     + sizes.timestamp + sizes.keysize 
@@ -132,6 +132,14 @@ Medea.prototype._put = function(k, v, offset, cb) {
   this.keydir[k] = entry;
 
   cb();
+};
+
+Medea.prototype._fileTimestamp = function(file) {
+  var f = file.replace('\\', '/');
+  var lastSlashLocation = file.lastIndexOf('/');
+  var dotLocation = file.indexOf('.');
+  var ts = file.substring(lastSlashLocation+1, dotLocation);
+  return Number(ts);
 };
 
 Medea.prototype._write = function(bufs, offset) {
