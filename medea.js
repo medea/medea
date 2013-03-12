@@ -1,11 +1,13 @@
 var fs = require('fs');
 var crc32 = require('crc32');
+var msgpack = require('msgpack-js');
 
 var sizes = {
   timestamp: 32,
   keysize: 16,
   valsize: 32,
-  crc: 32
+  crc: 32,
+  header: 32 + 32 + 16 + 32 // crc + timestamp + keysize + valsize
 };
 
 var tombstone = 'medea_tombstone';
@@ -101,6 +103,8 @@ Medea.prototype.put = function(k, v, cb) {
 };
 
 Medea.prototype._put = function(k, v, offset, cb) {
+  var packed = msgpack.encode(v);
+
   var ts = Date.now();
 
   var crc = new Buffer(sizes.crc);
@@ -108,7 +112,7 @@ Medea.prototype._put = function(k, v, offset, cb) {
   var keysz = new Buffer(sizes.keysize);
   var valuesz = new Buffer(sizes.valsize);
   var key = new Buffer(k);
-  var value = new Buffer(v);
+  var value = new Buffer(packed);
 
   timestamp.write(ts.toString());
   keysz.write(key.length.toString());
@@ -124,9 +128,7 @@ Medea.prototype._put = function(k, v, offset, cb) {
   var entry = new KeyDirEntry();
   entry.fileId = this._fileTimestamp(this.active.filename);
   entry.valueSize = value.length;
-  entry.valuePosition = offset + sizes.crc 
-    + sizes.timestamp + sizes.keysize 
-    + sizes.valsize + key.length;
+  entry.valuePosition = offset + sizes.header + key.length;
   entry.timestamp = ts;
 
   this.keydir[k] = entry;
@@ -152,8 +154,9 @@ Medea.prototype.get = function(key, cb) {
   if (entry) {
     var readBuffer = new Buffer(entry.valueSize);
     fs.read(this.active.fd, readBuffer, 0, entry.valueSize, entry.valuePosition, function(err, bytesRead, buffer) {
-      if (buffer.toString() !== tombstone) {
-        cb(buffer);
+      var msg = msgpack.decode(buffer);
+      if (msg !== tombstone) {
+        cb(msg);
       } else {
         cb();
       }
