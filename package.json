@@ -10,7 +10,7 @@
   "author": "Kevin Swiber <kswiber@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "crc32": "~0.2.2",
-    "msgpack-js": "~0.1.5"
+    "msgpack-js": "~0.1.5",
+    "buffer-crc32": "~0.2.1"
   }
 }
