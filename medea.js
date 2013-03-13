@@ -289,7 +289,7 @@ Medea.prototype._checkWrite = function(key, value) {
 
 Medea.prototype.close = function(cb) {
   var that = this;
-  this._closeForWriting(function() {
+  that._closeForWriting(function() {
     fs.unlink(that.writeLock.filename, function(err) {
       fs.close(that.writeLock.fd, function() {
         cb();
@@ -424,7 +424,8 @@ Medea.prototype._put = function(k, v, offset, cb) {
   var next = function(cb) { cb(); };
   var check = this._checkWrite(k, v);
   if (check === writeCheck.wrap) {
-    next = this._wrapWriteFile;
+    console.log('need to wrap');
+    next = this._wrapWriteFile.bind(this);
   } else if (check === writeCheck.fresh) {
     var that = this;
     next = function(cb) {
@@ -489,6 +490,20 @@ Medea.prototype._put = function(k, v, offset, cb) {
     that.keydir[k] = entry;
 
     cb();
+  });
+};
+
+Medea.prototype._wrapWriteFile = function(cb) {
+  console.log('wrapping...');
+  var oldFile = this.active;
+
+  var that = this;
+  that._closeForWriting(function() {
+    that._createFile(function() {
+      that._writeActiveFile(that.writeLock, that.active.filename, function() {
+        cb();
+      });
+    });
   });
 };
 
