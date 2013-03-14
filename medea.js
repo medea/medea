@@ -127,7 +127,7 @@ Medea.prototype.open = function(dir, options, cb) {
           cb(err);
           return;
         }
-        cb();
+        if (cb) cb();
         //that._open(that.active, cb);
       });
     } else {
@@ -138,7 +138,7 @@ Medea.prototype.open = function(dir, options, cb) {
 
   this._ensureDir(dir, function(err) {
     if (err) {
-      cb(err);
+      if (cb) cb(err);
     } else {
       next(dir, that.readOnly, cb);
     }
@@ -153,10 +153,10 @@ Medea.prototype._ensureDir = function(dir, cb) {
           cb(err);
           return;
         }
-        cb();
+        if (cb) cb();
       });
     } else {
-      cb();
+      if (cb) cb();
     }
   });
 };
@@ -164,9 +164,9 @@ Medea.prototype._ensureDir = function(dir, cb) {
 Medea.prototype._writeActiveFile = function(writeLock, filename, cb) {
   var lockfile = this.dirname + '/medea.write.lock';
   var stream = fs.createWriteStream(lockfile, { fd: writeLock.fd, start: 0 });
-  stream.write(process.pid + ' ' + (filename || '') + '\n');
-  this.writeLock = writeLock;
-  cb(null);
+  stream.write(process.pid + ' ' + (filename || '') + '\n', function(err) {
+    cb(null);
+  });
 };
 
 Medea.prototype._acquire = function(dir, type, cb) {
@@ -175,6 +175,9 @@ Medea.prototype._acquire = function(dir, type, cb) {
   var that = this;
   var writeFile = function() {
     that._acquireLock(filename, true, function(err, writeLock) {
+      if (err) {
+        console.log(err);
+      }
       that._writeActiveFile(writeLock, '', function(err) {
         cb(null, writeLock);
       });
@@ -207,18 +210,24 @@ Medea.prototype._acquire = function(dir, type, cb) {
         }
 
         if (pid === process.pid) {
-          cb(null, ret);
+          fs.close(fd, function(err) {
+            cb(null, ret);
+          });
         } else {
           fs.unlink(filename, function(err) {
             if (err) {
               cb(err);
               return;
             }
-            writeFile();
+            fs.close(fd, function(err) {
+              writeFile();
+            });
           });
         }
       } else {
-        writeFile();
+        fs.close(fd, function(err) {
+          writeFile();
+        });
       }
     };
   };
@@ -246,6 +255,8 @@ Medea.prototype._acquireLock = function(filename, isWriteLock, cb) {
 
   var flags = isWriteLock ? writeLockFlags : fsflags.O_RDONLY;
 
+  var that = this;
+
   fs.open(filename, flags, 0600, function(err, fd) {
     if (err) {
       cb(err);
@@ -254,8 +265,9 @@ Medea.prototype._acquireLock = function(filename, isWriteLock, cb) {
 
     var writeLock = new Lock();
     writeLock.filename = filename;
-    writeLock.type = isWriteLock ? 'write' : 'merge';
+    writeLock.type = 'write';
     writeLock.fd = fd;
+    that.writeLock = writeLock;
 
     cb(null, writeLock);
   });
@@ -292,7 +304,7 @@ Medea.prototype.close = function(cb) {
   that._closeForWriting(function() {
     fs.unlink(that.writeLock.filename, function(err) {
       fs.close(that.writeLock.fd, function() {
-        cb();
+        if (cb) cb();
       });
     });
   });
@@ -300,7 +312,7 @@ Medea.prototype.close = function(cb) {
 
 Medea.prototype._closeForWriting = function(cb) {
   if (!this.active || this.active.offset === 0 || this.active.readOnly) {
-    cb();
+    if (cb) cb();
     return;
   }
 
@@ -309,7 +321,7 @@ Medea.prototype._closeForWriting = function(cb) {
     fs.fsync(that.active.fd, function(err) {
       fs.close(that.active.fd, function(err) {
         that.active.readOnly = true;
-        cb();
+        if (cb) cb();
       });
     });
   });
@@ -339,7 +351,7 @@ Medea.prototype._closeHintFile = function(cb) {
       fs.close(that.active.hintFd, function(err) {
         that.active.hintFd = null;
         that.active.hintCrc = new Buffer(sizes.crc);
-        cb();
+        if (cb) cb();
       });
     });
   });
@@ -347,10 +359,10 @@ Medea.prototype._closeHintFile = function(cb) {
 
 Medea.prototype.put = function(k, v, cb) {
   var that = this;
-  fs.stat(this.active.filename, function(err, stat) {
-    var offset = stat ? stat.size : 0;
-    that._put(k, v, offset, cb);
-  });
+  //fs.stat(this.active.filename, function(err, stat) {
+    //var offset = stat ? stat.size : 0;
+    that._put(k, v, this.active.offset, cb);
+  //});
 };
 
 Medea.prototype._createFile = function(cb) {
@@ -366,6 +378,9 @@ Medea.prototype._createFile = function(cb) {
         var hintFile = new FileInfo();
         hintFile.filename = hintFilename;
         that._open(hintFile, function(err, val2) {
+          if (err) {
+            console.log(err);
+          }
           that.active = new FileInfo();
           that.active.filename = file.filename;
           that.active.readOnly = false;
@@ -374,7 +389,7 @@ Medea.prototype._createFile = function(cb) {
           that.active.offset = 0;
           that.active.timestamp = stamp;
 
-          cb();
+          if (cb) cb();
         });
       });
     });
@@ -424,7 +439,6 @@ Medea.prototype._put = function(k, v, offset, cb) {
   var next = function(cb) { cb(); };
   var check = this._checkWrite(k, v);
   if (check === writeCheck.wrap) {
-    console.log('need to wrap');
     next = this._wrapWriteFile.bind(this);
   } else if (check === writeCheck.fresh) {
     var that = this;
@@ -432,7 +446,7 @@ Medea.prototype._put = function(k, v, offset, cb) {
       that._acquire(that.dirname, 'write', function(err, writeLock) {
         that._createFile(function(err, file) {
           that._writeActiveFile(writeLock, that.active.filename, function() {
-            cb();
+            if (cb) cb();
           });
         });
       });
@@ -454,11 +468,12 @@ Medea.prototype._put = function(k, v, offset, cb) {
     var key = new Buffer(k);
     var value = new Buffer(v);
 
-    timestamp.write(ts.toString());
-    keysz.write(key.length.toString());
-    valuesz.write(value.length.toString());
+    timestamp.writeDoubleBE(ts, 0);
+    keysz.writeDoubleBE(key.length, 0);
+    valuesz.writeDoubleBE(value.length, 0);
 
     var bufs = Buffer.concat([timestamp, keysz, valuesz, key, value]);
+    //console.log(bufs.toString());
     var crcBuf = crc32(bufs);
 
     crcBuf.copy(crc, 0, 0, crcBuf.length);
@@ -489,19 +504,18 @@ Medea.prototype._put = function(k, v, offset, cb) {
 
     that.keydir[k] = entry;
 
-    cb();
+    if (cb) cb();
   });
 };
 
 Medea.prototype._wrapWriteFile = function(cb) {
-  console.log('wrapping...');
   var oldFile = this.active;
 
   var that = this;
   that._closeForWriting(function() {
     that._createFile(function() {
       that._writeActiveFile(that.writeLock, that.active.filename, function() {
-        cb();
+        if (cb) cb();
       });
     });
   });
@@ -517,8 +531,7 @@ Medea.prototype._fileTimestamp = function(file) {
 
 Medea.prototype._write = function(filename, fd, bufs, cb) {
   var stream = fs.createWriteStream(filename, { flags: 'a', fd: fd });
-  stream.write(bufs);
-  if (cb) cb();
+  stream.write(bufs, cb);
 };
 
 Medea.prototype.get = function(key, cb) {
@@ -527,13 +540,13 @@ Medea.prototype.get = function(key, cb) {
     var readBuffer = new Buffer(entry.valueSize);
     fs.read(this.active.fd, readBuffer, 0, entry.valueSize, entry.valuePosition, function(err, bytesRead, buffer) {
       if (buffer !== tombstone) {
-        cb(buffer);
+        cb(readBuffer);
       } else {
-        cb();
+        if (cb) cb();
       }
     });
   } else {
-    cb();
+    if (cb) cb();
   }
 };
 
@@ -544,7 +557,7 @@ Medea.prototype.remove = function(key, cb) {
       delete that.keydir[key];
     }
 
-    cb();
+    if(cb) cb();
   });
 };
 

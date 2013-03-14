@@ -6,12 +6,15 @@ var medea = new Medea();
 
 medea.open(function() {
   console.log('OPENED');
-  medea.put('hello', msgpack.encode({ job: true, cow: 3, '?': new Buffer(0x32) }), function() {
+  var packed = msgpack.encode({ job: true, cow: 3, '?': new Buffer(0x32) });
+  medea.put('hello', packed, function() {
     medea.get('hello', function(val) {
-      console.log('RECEIVED:', msgpack.decode(val));
-      medea.put('yo', ['a',1,'2'], function() {
+      console.log('rerieved:', val);
+      var decoded = msgpack.decode(val);
+      console.log('RECEIVED:', decoded);
+      medea.put('yo', 'dudex', function() {
         medea.get('yo', function(val2) {
-          console.log('RECEIVED:', val2);
+          console.log('RECEIVED:', val2.toString());
           medea.remove('hello', function() {
             medea.get('hello', function(val3) {
               assert(!val3);
