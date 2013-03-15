@@ -1,13 +1,13 @@
 var fs = require('fs');
 
 var sizes = {
-  timestamp: 32,
-  keysize: 16,
-  valsize: 32,
-  crc: 32,
-  header: 32 + 32 + 16 + 32, // crc + timestamp + keysize + valsize
-  offset: 64,
-  totalSize: 32
+  timestamp: 8,
+  keysize: 2,
+  valsize: 4,
+  crc: 4,
+  header: 4 + 8 + 2 + 4, // crc + timestamp + keysize + valsize
+  offset: 16,
+  totalsize: 4
 };
 
 var stream = fs.createReadStream('medea/1.medea.hint');
@@ -33,38 +33,26 @@ stream.on('end', function() {
 stream.resume();
 
 function read(data, offset) {
-  if (offset + sizes.header > data.length) {
+  if (offset + sizes.crc === data.length) {
+    console.log('hint file crc:', data.slice(offset, offset + sizes.crc).toString('hex'));
     console.log('done!');
     return;
   }
   var header = data.slice(offset, offset + sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
-  console.log(header.length)
   var timestamp = header.readDoubleBE(0);
-  console.log(header.length)
-  var keysz = header.readDoubleBE(sizes.timestamp);
-  var totalsz = header.readDoubleBE(sizes.timestamp + sizes.keysize);
+  var keysz = header.readUInt16BE(sizes.timestamp);
+  var totalsz = header.readUInt32BE(sizes.timestamp + sizes.keysize);
+  var offsetField = header.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize);
 
   console.log('timestamp:', timestamp);
   console.log('key size:', keysz);
   console.log('total size:', totalsz);
-  console.log('offset', offset);
-  console.log(data.length - offset);
+  console.log('offset:', offsetField);
 
   var key = data.slice(offset + header.length, offset + header.length + keysz);
-  console.log(key.toString());
+  console.log('key:', key.toString());
   console.log('--');
 
   read(data, offset + header.length + keysz);
-  
-  /*
-  var key = data.slice(offset + sizes.header, offset + sizes.header + keysz);
-  console.log('key:', key.toString());
-
-  var value = data.slice(offset + sizes.header + keysz, offset + sizes.header + keysz + valuesz);
-  console.log('value', value.toString());
-  console.log('--');
-
-  read(data, offset + sizes.header + keysz + valuesz);
-  */
 };
 

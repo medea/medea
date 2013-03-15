@@ -2,13 +2,13 @@ var fs = require('fs');
 var crc32 = require('buffer-crc32');
 
 var sizes = {
-  timestamp: 32,
-  keysize: 16,
-  valsize: 32,
-  crc: 32,
-  header: 32 + 32 + 16 + 32, // crc + timestamp + keysize + valsize
-  offset: 64,
-  totalSize: 32
+  timestamp: 8,
+  keysize: 2,
+  valsize: 4,
+  crc: 4,
+  header: 4 + 8 + 2 + 4, // crc + timestamp + keysize + valsize
+  offset: 16,
+  totalsize: 4
 };
 
 var writeCheck = {
@@ -125,7 +125,11 @@ Medea.prototype.open = function(dir, options, cb) {
       that._acquire(dir, 'write', function(err, writeLock) {
         that._createFile(function(err, file) {
           that._writeActiveFile(writeLock, file.filename, function() {
-            if (cb) cb();
+            that._getReadableFiles(function(err, arr) {
+              that._scanKeyFiles(arr, function() {
+                if (cb) cb();
+              });
+            });
           });
         });
       });
@@ -156,6 +160,221 @@ Medea.prototype._ensureDir = function(dir, cb) {
     } else {
       if (cb) cb();
     }
+  });
+};
+
+Medea.prototype._listDataFiles = function(writeFile, mergeFile, cb) {
+  var that = this;
+  this._dataFileTstamps(function(err, tstamps) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    var sorted = tstamps.sort(function(a, b) {
+      if (a > b) return -1;
+      if (a < b) return 1;
+      return 0;
+    });
+
+    [writeFile, mergeFile].forEach(function(f) {
+      if (f) {
+        var n = f.replace('.medea.data', '');
+        var index = sorted.indexOf(n);
+        if (index !== -1) {
+          delete sorted[index];
+        }
+      }
+    });
+
+    var ret = sorted.map(function(t) {
+      return that.dirname + '/' + t + '.medea.data';
+    });
+
+    cb(null, ret);
+  });
+};
+
+Medea.prototype._scanKeyFiles = function(arr, cb) {
+  if (arr.length === 0) {
+    cb();
+    return;
+  }
+
+  var that = this;
+
+  var hintFiles = arr.map(function(f) {
+    return f.replace('.medea.data', '.medea.hint');
+  });
+
+  var iterator = function(hintFiles, i, max, cb1) {
+    var current = hintFiles[i];
+
+    var hintHeaderSize = sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset;
+
+    var stream = fs.createReadStream(current);
+
+    var remainingBuffers = [];
+    var remainingBufferLength;
+    var curlen = 0;
+    var curBuf;
+    var findlen = -1;
+    var lastHeaderBuf;
+    var lastKeyLen = -1;
+    var state = 'findingHeader';
+    
+    stream.on('data', function(chunk) {
+      curlen += chunk.length;
+
+      while (curlen) {
+        if (curlen >= hintHeaderSize && state === 'findingHeader') {
+          var headerBuf = new Buffer(hintHeaderSize);
+
+          var headerOfs = 0;
+          if (remainingBuffers.length) {
+            remainingBuffers.push(chunk);
+            remainingBuffers.forEach(function(b) {
+              b.copy(headerBuf, 0, headerOfs, b.length);
+              headerOfs += b.length;
+            });
+          } else {
+            chunk.copy(headerBuf, 0, 0, headerBuf.length);
+          }
+
+          var keylen = headerBuf.readUInt16BE(sizes.timestamp);
+          lastKeyLen = keylen;
+          lastHeaderBuf = headerBuf;
+
+          chunk = chunk.slice(headerBuf.length);
+          curlen = chunk.length;
+
+          state = 'headerFound';
+        } 
+
+        if (curlen >= lastKeyLen && state === 'headerFound') {
+          // pull entire block
+          
+          var keyBuf = new Buffer(lastKeyLen);
+          var keyOfs = 0;
+          if (remainingBuffers.length) {
+            remainingBuffers.push(chunk);
+            remainingBuffers.forEach(function(b) {
+              b.copy(keyBuf, 0, keyOfs, b.length);
+              keyOfs += b.length;
+            });
+          } else {
+            chunk.copy(keyBuf, 0, 0, keyBuf.length);
+          }
+
+          var key = keyBuf.toString();
+
+          var entry = new KeyDirEntry();
+          entry.key = key;
+          entry.fileId = Number(current.replace(that.dirname + '/', '').replace('.medea.hint', ''));
+          entry.timestamp = lastHeaderBuf.readDoubleBE(0);
+          entry.valueSize = lastHeaderBuf.readUInt32BE(sizes.timestamp + sizes.keysize) - key.length - sizes.header;
+          entry.valuePosition = lastHeaderBuf.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize) + sizes.header + key.length;
+          that.keydir[key] = entry;
+
+          //console.log(entry);
+          
+          chunk = chunk.slice(lastKeyLen);
+          curlen = chunk.length;
+          lastKeyLen = -1;
+          lastHeaderBuf = null;
+
+          //state = 'keyFound';
+          state = 'keyFound';
+        }
+
+        if (chunk.length === sizes.crc && state === 'keyFound') {
+          chunk = new Buffer(0);
+          curlen = 0;
+        } else {
+          state = 'findingHeader';
+        }
+      }
+
+      if (chunk.length) {
+        remainingBuffers.push(chunk);
+      }
+    });
+    
+    stream.on('end', function() {
+      if (i === max) {
+        cb1();
+      } else {
+        iterator(hintFiles, i+1, max, cb1);
+      }
+    });
+  };
+
+  iterator(hintFiles, 0, hintFiles.length - 1, function(err) {
+    cb();
+  });
+};
+
+Medea.prototype._getReadableFiles = function(cb) {
+  var that = this;
+  var writingFile = this._readActiveFile('write', function(err, writeFile) {
+    var mergingFile = that._readActiveFile('merge', function(err, mergeFile) {
+      // TODO: Filter out files marked for deletion by successful merge.
+      that._listDataFiles(writeFile, mergeFile, function(err, files) {
+        cb(null, files);
+      });
+    });
+  });
+};
+
+Medea.prototype._readActiveFile = function(type, cb) {
+  var filename = this.dirname + '/medea.' + type + '.lock';
+  this._acquireLock(filename, false, function(err, lock) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    var bufs = [];
+    var len = 0;
+    var ondata = function(chunk) {
+      bufs.push(chunk);
+      len += chunk.length;
+    };
+
+    var onend = function(lockFd) {
+      return function() {
+        if (!bufs || !bufs.length) {
+          cb(null, '');
+          return;
+        };
+        var all = new Buffer(len);
+        var offset = 0;
+        bufs.forEach(function(buf) {
+          buf.copy(all, 0, offset, buf.length);
+          offset += buf.length;
+        });
+
+        var text = all.toString();
+
+        var arr = text.replace('\n', '').split(' ');
+
+        // release lock?
+        if (arr.length && arr[1]) {
+          cb(null, arr[1]);
+        } else {
+          cb(null, '');
+        }
+      };
+    };
+
+    var stream = fs.createReadStream(filename, { fd: lock.fd });
+    stream.on('data', ondata);
+    stream.on('end', onend(lock.fd));
+    stream.on('error', function(err) {
+      cb(err);
+    });
+
+    stream.resume();
   });
 };
 
@@ -322,11 +541,10 @@ Medea.prototype._closeForWriting = function(file, cb) {
     return;
   }
 
+  var that = this;
   if (file.hintFd) {
     this._closeHintFile(file, function() {
-      //fs.fsync(file.hintFd, function(err) {
-        if (cb) cb();
-      //});
+      if (cb) cb();
     });
   } else {
     if (cb) cb();
@@ -340,7 +558,7 @@ Medea.prototype._closeHintFile = function(file, cb) {
   }
   file.closingHintFile = true;
   var hintFilename = this.dirname + '/' + file.timestamp + '.medea.hint';
-  var keysz = new Buffer(sizes.keysize);
+  /*var keysz = new Buffer(sizes.keysize);
   keysz.writeDoubleBE(0, 0);
 
   var tstamp = new Buffer(sizes.timestamp);
@@ -351,11 +569,15 @@ Medea.prototype._closeHintFile = function(file, cb) {
 
   var totalSize = file.hintCrc;
   
-  var key = new Buffer('');
+  var key = new Buffer('');*/
 
-  var bufs = Buffer.concat([tstamp, keysz, totalSize, offset, key]);
+  //var bufs = Buffer.concat([tstamp, keysz, totalSize, offset, key]);
+  
+  var crcBuf = new Buffer(sizes.crc);
+  file.hintCrc.copy(crcBuf, 0, 0, file.hintCrc.length);
+
   var that = this;
-  this._write(hintFilename, file.hintFd, bufs, function() {
+  this._write(hintFilename, file.hintFd, crcBuf, function() {
     fs.fsync(file.hintFd, function(err) {
       if (err) {
         console.log('Error fsyncing hint file during close.', err);
@@ -460,10 +682,6 @@ Medea.prototype._put = function(k, v, offset, cb) {
 
   var that = this;
   next(function() {
-    if (!v instanceof Buffer) {
-      v = new Buffer(v);
-    }
-
     var ts = Date.now();
 
     var crc = new Buffer(sizes.crc);
@@ -474,8 +692,8 @@ Medea.prototype._put = function(k, v, offset, cb) {
     var value = new Buffer(v);
 
     timestamp.writeDoubleBE(ts, 0);
-    keysz.writeDoubleBE(key.length, 0);
-    valuesz.writeDoubleBE(value.length, 0);
+    keysz.writeUInt16BE(key.length, 0);
+    valuesz.writeUInt32BE(value.length, 0);
 
     var bufs = Buffer.concat([timestamp, keysz, valuesz, key, value]);
     var crcBuf = crc32(bufs);
@@ -487,11 +705,11 @@ Medea.prototype._put = function(k, v, offset, cb) {
     that._write(that.active.filename, that.active.fd, line);
 
     var offsetField = new Buffer(sizes.offset);
-    var totalSizeField = new Buffer(sizes.totalSize);
+    var totalSizeField = new Buffer(sizes.totalsize);
 
     var totalSz = key.length + value.length + sizes.header;
     offsetField.writeDoubleBE(offset, 0);
-    totalSizeField.writeDoubleBE(totalSz, 0);
+    totalSizeField.writeUInt32BE(totalSz, 0);
 
     var hintBufs = Buffer.concat([timestamp, keysz, totalSizeField, offsetField, key]);
 
@@ -549,12 +767,30 @@ Medea.prototype.get = function(key, cb) {
   var entry = this.keydir[key];
   if (entry) {
     var readBuffer = new Buffer(entry.valueSize);
-    fs.read(this.active.fd, readBuffer, 0, entry.valueSize, entry.valuePosition, function(err, bytesRead, buffer) {
-      if (buffer !== tombstone) {
-        cb(readBuffer);
+    var filename = this.dirname + '/' + entry.fileId + '.medea.data';
+    var stream = fs.createReadStream(filename, { start: entry.valuePosition, end: entry.valuePosition + entry.valueSize - 1 });
+
+    var bufs = [];
+    var len = 0;
+    stream.on('data', function(chunk) {
+      bufs.push(chunk);
+      len += chunk.length;
+    });
+    
+    stream.on('end', function() {
+      var val = new Buffer(len);
+      var ofs = 0;
+      bufs.forEach(function(b) {
+        b.copy(val, 0, ofs, b.length);
+        ofs += b.length;
+      });
+
+      if (val !== tombstone) {
+        cb(val);
       } else {
         if (cb) cb();
       }
+
     });
   } else {
     if (cb) cb();
