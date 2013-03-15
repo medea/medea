@@ -20,6 +20,11 @@ var server = argo()
       }
       
       medea.get(key, function(val) {
+        if (!val) {
+          env.response.statusCode = 404;
+          next(env);
+          return;
+        }
         env.response.statusCode = 200;
         env.response.body = val.toString();
         next(env);
@@ -42,6 +47,23 @@ var server = argo()
           next(env);
         });
       });
+    });
+  })
+  .del('/bitcask', function(handle) {
+    handle('request', function(env, next) {
+      var key = env.request.url.substr('/bitcask/'.length);
+
+      if (!key.length) {
+        env.response.statusCode = 404;
+        next(env);
+        return;
+      }
+
+      medea.remove(key, function() {
+        env.statusCode = 200;
+        next(env);
+      });
+
     });
   });
 

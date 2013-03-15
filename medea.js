@@ -268,13 +268,16 @@ Medea.prototype._scanKeyFiles = function(arr, cb) {
 
           var key = keyBuf.toString();
 
-          var entry = new KeyDirEntry();
-          entry.key = key;
-          entry.fileId = Number(current.replace(that.dirname + '/', '').replace('.medea.hint', ''));
-          entry.timestamp = lastHeaderBuf.readDoubleBE(0);
-          entry.valueSize = lastHeaderBuf.readUInt32BE(sizes.timestamp + sizes.keysize) - key.length - sizes.header;
-          entry.valuePosition = lastHeaderBuf.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize) + sizes.header + key.length;
-          that.keydir[key] = entry;
+          var fileId = Number(current.replace(that.dirname + '/', '').replace('.medea.hint', ''));
+          if (!that.keydir[key] || (that.keydir[key] && that.keydir[key].fileId === fileId)) {
+            var entry = new KeyDirEntry();
+            entry.key = key;
+            entry.fileId = fileId;
+            entry.timestamp = lastHeaderBuf.readDoubleBE(0);
+            entry.valueSize = lastHeaderBuf.readUInt32BE(sizes.timestamp + sizes.keysize) - key.length - sizes.header;
+            entry.valuePosition = lastHeaderBuf.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize) + sizes.header + key.length;
+            that.keydir[key] = entry;
+          }
 
           //console.log(entry);
           
@@ -785,7 +788,7 @@ Medea.prototype.get = function(key, cb) {
         ofs += b.length;
       });
 
-      if (val !== tombstone) {
+      if (val.toString() !== tombstone.toString()) {
         cb(val);
       } else {
         if (cb) cb();
