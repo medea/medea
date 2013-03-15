@@ -1,8 +1,23 @@
+var cluster = require('cluster');
+var os = require('os');
 var argo = require('argo-server');
 var Medea = require('./medea');
 
+/*if (cluster.isMaster) {
+  var writerId;
+  for (var i = 0, len = os.cpus().length; i < len; i++) {
+    if (!writerId) {
+      var worker = cluster.fork({ MEDEA_WRITER: true });
+      writerId = worker.id;
+    } else {
+      cluster.fork({ MEDEA_WRITE_HANDLE: writerId });
+    }
+  }
+} else*/ {
+
+  console.log
 var options = {
-  maxFileSize: 1024
+  maxFileSize: 1024,
 };
 
 var medea = new Medea(options);
@@ -76,3 +91,4 @@ medea.open(function() {
     medea.close(function() { console.log('closed medea'); process.exit();});
   });
 });
+}
