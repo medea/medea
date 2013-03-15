@@ -10,7 +10,7 @@ var sizes = {
   totalSize: 32
 };
 
-var stream = fs.createReadStream('medea/2.medea.data');
+var stream = fs.createReadStream('medea/1.medea.hint');
 
 var bufs = [];
 var len = 0;
@@ -37,17 +37,26 @@ function read(data, offset) {
     console.log('done!');
     return;
   }
-  var header = data.slice(offset, offset + sizes.header);
-  var crc = header.slice(0, sizes.crc);
-  var timestamp = header.readDoubleBE(sizes.crc);
-  var keysz = header.readDoubleBE(sizes.crc + sizes.timestamp);
-  var valuesz = header.readDoubleBE(sizes.crc + sizes.timestamp + sizes.keysize);
+  var header = data.slice(offset, offset + sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
+  console.log(header.length)
+  var timestamp = header.readDoubleBE(0);
+  console.log(header.length)
+  var keysz = header.readDoubleBE(sizes.timestamp);
+  var totalsz = header.readDoubleBE(sizes.timestamp + sizes.keysize);
 
-  console.log('crc:', crc);
   console.log('timestamp:', timestamp);
   console.log('key size:', keysz);
-  console.log('value size:', valuesz);
+  console.log('total size:', totalsz);
+  console.log('offset', offset);
+  console.log(data.length - offset);
+
+  var key = data.slice(offset + header.length, offset + header.length + keysz);
+  console.log(key.toString());
+  console.log('--');
+
+  read(data, offset + header.length + keysz);
   
+  /*
   var key = data.slice(offset + sizes.header, offset + sizes.header + keysz);
   console.log('key:', key.toString());
 
@@ -56,4 +65,6 @@ function read(data, offset) {
   console.log('--');
 
   read(data, offset + sizes.header + keysz + valuesz);
+  */
 };
+

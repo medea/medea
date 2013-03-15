@@ -123,15 +123,13 @@ Medea.prototype.open = function(dir, options, cb) {
   var next = function(dir, readOnly, cb) {
     if (!readOnly) {
       that._acquire(dir, 'write', function(err, writeLock) {
-        if (err) {
-          cb(err);
-          return;
-        }
-        if (cb) cb();
-        //that._open(that.active, cb);
+        that._createFile(function(err, file) {
+          that._writeActiveFile(writeLock, file.filename, function() {
+            if (cb) cb();
+          });
+        });
       });
     } else {
-      //that._open(that.active, cb);
       cb();
     }
   }
@@ -165,6 +163,9 @@ Medea.prototype._writeActiveFile = function(writeLock, filename, cb) {
   var lockfile = this.dirname + '/medea.write.lock';
   var stream = fs.createWriteStream(lockfile, { fd: writeLock.fd, start: 0 });
   stream.write(process.pid + ' ' + (filename || '') + '\n', function(err) {
+    if (err) {
+      console.log('Error on writing active file to write lock.', err);
+    }
     cb(null);
   });
 };
@@ -176,9 +177,12 @@ Medea.prototype._acquire = function(dir, type, cb) {
   var writeFile = function() {
     that._acquireLock(filename, true, function(err, writeLock) {
       if (err) {
-        console.log(err);
+        console.log('Error on acquiring write lock.', err);
       }
       that._writeActiveFile(writeLock, '', function(err) {
+        if (err) {
+          console.log('Error on writing active file:', err);
+        }
         cb(null, writeLock);
       });
     });
@@ -209,23 +213,22 @@ Medea.prototype._acquire = function(dir, type, cb) {
           fname = c[1];
         }
 
-        if (pid === process.pid) {
-          fs.close(fd, function(err) {
-            cb(null, ret);
-          });
+        if (pid == process.pid) {
+          cb(null, that.writeLock);
         } else {
           fs.unlink(filename, function(err) {
             if (err) {
               cb(err);
               return;
             }
-            fs.close(fd, function(err) {
-              writeFile();
-            });
+            that._acquire(dir, type, cb);
+            return;
           });
         }
       } else {
         fs.close(fd, function(err) {
+          if (err) {
+          }
           writeFile();
         });
       }
@@ -245,6 +248,9 @@ Medea.prototype._acquire = function(dir, type, cb) {
     var stream = fs.createReadStream(filename, { fd: writeLock.fd });
     stream.on('data', ondata);
     stream.on('end', onend(writeLock.fd));
+    stream.on('error', function(err) {
+      cb(err);
+    });
 
     stream.resume();
   });
@@ -301,7 +307,7 @@ Medea.prototype._checkWrite = function(key, value) {
 
 Medea.prototype.close = function(cb) {
   var that = this;
-  that._closeForWriting(function() {
+  that._closeForWriting(this.active, function() {
     fs.unlink(that.writeLock.filename, function(err) {
       fs.close(that.writeLock.fd, function() {
         if (cb) cb();
@@ -310,47 +316,55 @@ Medea.prototype.close = function(cb) {
   });
 };
 
-Medea.prototype._closeForWriting = function(cb) {
-  if (!this.active || this.active.offset === 0 || this.active.readOnly) {
+Medea.prototype._closeForWriting = function(file, cb) {
+  if (!file || file.offset === 0 || file.readOnly) {
     if (cb) cb();
     return;
   }
 
-  var that = this;
-  this._closeHintFile(function() {
-    fs.fsync(that.active.fd, function(err) {
-      fs.close(that.active.fd, function(err) {
-        that.active.readOnly = true;
+  if (file.hintFd) {
+    this._closeHintFile(file, function() {
+      //fs.fsync(file.hintFd, function(err) {
         if (cb) cb();
-      });
+      //});
     });
-  });
+  } else {
+    if (cb) cb();
+  }
 };
 
-Medea.prototype._closeHintFile = function(cb) {
-  var hintFilename = this.dirname + '/' + this.active.timestamp + '.medea.hint';
+Medea.prototype._closeHintFile = function(file, cb) {
+  if (!file.hintFd || file.closingHintFile) {
+    if (cb) cb();
+    return;
+  }
+  file.closingHintFile = true;
+  var hintFilename = this.dirname + '/' + file.timestamp + '.medea.hint';
   var keysz = new Buffer(sizes.keysize);
-  keysz.write('0');
+  keysz.writeDoubleBE(0, 0);
 
   var tstamp = new Buffer(sizes.timestamp);
-  tstamp.write('0');
+  tstamp.writeDoubleBE(0, 0);
 
   var offset = new Buffer(sizes.offset);
-  offset.write(Number.MAX_VALUE.toString());
+  offset.writeDoubleBE(0, 0);
 
-  var totalSize = new Buffer(sizes.totalSize);
-  totalSize.write(this.active.hintCrc.toString());
+  var totalSize = file.hintCrc;
   
-  var key = new Buffer(1);
-  key.write('');
+  var key = new Buffer('');
 
   var bufs = Buffer.concat([tstamp, keysz, totalSize, offset, key]);
   var that = this;
-  this._write(hintFilename, this.active.hintFd, bufs, function() {
-    fs.fsync(that.active.hintFd, function(err) {
-      fs.close(that.active.hintFd, function(err) {
-        that.active.hintFd = null;
-        that.active.hintCrc = new Buffer(sizes.crc);
+  this._write(hintFilename, file.hintFd, bufs, function() {
+    fs.fsync(file.hintFd, function(err) {
+      if (err) {
+        console.log('Error fsyncing hint file during close.', err);
+        if (cb) cb(err);
+        return;
+      }
+      fs.close(file.hintFd, function(err) {
+        file.hintFd = null;
+        file.hintCrc = new Buffer(sizes.crc);
         if (cb) cb();
       });
     });
@@ -359,10 +373,7 @@ Medea.prototype._closeHintFile = function(cb) {
 
 Medea.prototype.put = function(k, v, cb) {
   var that = this;
-  //fs.stat(this.active.filename, function(err, stat) {
-    //var offset = stat ? stat.size : 0;
-    that._put(k, v, this.active.offset, cb);
-  //});
+  that._put(k, v, this.active.offset, cb);
 };
 
 Medea.prototype._createFile = function(cb) {
@@ -374,12 +385,17 @@ Medea.prototype._createFile = function(cb) {
     file.filename = filename;
     that._ensureDir(that.dirname, function(err) {
       that._open(file, function(err, val1) {
+        if (err) {
+          cb(err);
+          return;
+        }
         var hintFilename = that.dirname + '/' + stamp + '.medea.hint';
         var hintFile = new FileInfo();
         hintFile.filename = hintFilename;
         that._open(hintFile, function(err, val2) {
           if (err) {
-            console.log(err);
+            cb(err)
+            return;
           }
           that.active = new FileInfo();
           that.active.filename = file.filename;
@@ -389,7 +405,7 @@ Medea.prototype._createFile = function(cb) {
           that.active.offset = 0;
           that.active.timestamp = stamp;
 
-          if (cb) cb();
+          if (cb) cb(null, that.active);
         });
       });
     });
@@ -440,17 +456,6 @@ Medea.prototype._put = function(k, v, offset, cb) {
   var check = this._checkWrite(k, v);
   if (check === writeCheck.wrap) {
     next = this._wrapWriteFile.bind(this);
-  } else if (check === writeCheck.fresh) {
-    var that = this;
-    next = function(cb) {
-      that._acquire(that.dirname, 'write', function(err, writeLock) {
-        that._createFile(function(err, file) {
-          that._writeActiveFile(writeLock, that.active.filename, function() {
-            if (cb) cb();
-          });
-        });
-      });
-    };
   }
 
   var that = this;
@@ -473,7 +478,6 @@ Medea.prototype._put = function(k, v, offset, cb) {
     valuesz.writeDoubleBE(value.length, 0);
 
     var bufs = Buffer.concat([timestamp, keysz, valuesz, key, value]);
-    //console.log(bufs.toString());
     var crcBuf = crc32(bufs);
 
     crcBuf.copy(crc, 0, 0, crcBuf.length);
@@ -486,8 +490,8 @@ Medea.prototype._put = function(k, v, offset, cb) {
     var totalSizeField = new Buffer(sizes.totalSize);
 
     var totalSz = key.length + value.length + sizes.header;
-    offsetField.write(offset.toString());
-    totalSizeField.write(totalSz.toString());
+    offsetField.writeDoubleBE(offset, 0);
+    totalSizeField.writeDoubleBE(totalSz, 0);
 
     var hintBufs = Buffer.concat([timestamp, keysz, totalSizeField, offsetField, key]);
 
@@ -508,13 +512,20 @@ Medea.prototype._put = function(k, v, offset, cb) {
   });
 };
 
+// This differs in order from Erlang Bitcask.
+// This may cause files to go slightly over max file size, 
+// but it allows for fast async behavior without blocking.
+//
+// 1. Create new wrapped file.
+// 2. Switch active record to new file.
+// 3. Close for writing.
 Medea.prototype._wrapWriteFile = function(cb) {
   var oldFile = this.active;
 
   var that = this;
-  that._closeForWriting(function() {
-    that._createFile(function() {
-      that._writeActiveFile(that.writeLock, that.active.filename, function() {
+  that._createFile(function(err, file) {
+    that._writeActiveFile(that.writeLock, file.filename, function() {
+      that._closeForWriting(oldFile, function() {
         if (cb) cb();
       });
     });

@@ -7,6 +7,7 @@ var medea = new Medea();
 medea.open(function() {
   console.log('OPENED');
   var packed = msgpack.encode({ job: true, cow: 3, '?': new Buffer(0x32) });
+  console.log('packed:',packed);
   medea.put('hello', packed, function() {
     medea.get('hello', function(val) {
       console.log('rerieved:', val);

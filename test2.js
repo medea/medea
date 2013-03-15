@@ -1,14 +1,14 @@
 var Medea = require('./medea');
 
-/*var options = {
-  maxFileSize: 1024*100
-};*/
+var options = {
+  //maxFileSize: 1024
+};
 
-var medea = new Medea();
+var medea = new Medea(options);
 var start;
 medea.open(function() {
   start = Date.now();
-  put(0, 1987);
+  put(0, 1980);
 });
 
 var put = function(i, max) {

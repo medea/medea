@@ -48,3 +48,9 @@ var server = argo()
 medea.open(function() {
   server.listen(process.env.PORT || 3000);
 });
+
+['SIGTERM','SIGINT'].forEach(function(ev) {
+  process.on(ev, function() {
+    medea.close(function() { console.log('closed medea'); process.exit();});
+  });
+});
