@@ -94,8 +94,8 @@ var Medea = module.exports = function(options) {
   this.maxFoldAge = options.hasOwnProperty('maxFoldAge') ? options.maxFoldAge : -1;
   this.maxFoldPuts = options.hasOwnProperty('maxFoldPuts') ? options.maxFoldPuts : 0;
   this.expirySecs = options.hasOwnProperty('expirySecs') ? options.expirySecs : -1;
-  this.dirname = null;
-  this.readOnly = true;
+  this.dirname = options.hasOwnProperty('dirname') ? options.dirname: null;
+  this.readOnly = false;
   this.isWrapping = false;
   this.queued = 0;
 };
@@ -109,19 +109,12 @@ Medea.prototype.open = function(dir, options, cb) {
   if (typeof dir === 'function') {
     options = {};
     cb = dir;
-    dir = 'medea';
+    dir = this.dirname || 'medea';
   }
 
-  this.readOnly = options.hasOwnProperty('readOnly') ? options.readOnly : false;
-  this.active = new FileInfo();
-  this.active.filename =  dir + '/' + Date.now().toString() + '.medea.data';
-  this.active.readOnly = this.readOnly;
-
-  var that = this;
-
-  dir = __dirname + '/' + dir;
   this.dirname = dir;
 
+  var that = this;
   var scanFiles = function(cb) {
     that._getReadableFiles(function(err, arr) {
       that._scanKeyFiles(arr, function() {
@@ -704,6 +697,14 @@ Medea.prototype._put = function(k, v, offset, cb) {
   var that = this;
   next(function() {
     var ts = Date.now();
+
+    if (!(k instanceof Buffer)) {
+      k = new Buffer(k.toString());
+    }
+
+    if (!(v instanceof Buffer)) {
+      v = new Buffer(v.toString());
+    }
 
     var crc = new Buffer(sizes.crc);
     var timestamp = new Buffer(sizes.timestamp);
