@@ -919,6 +919,43 @@ Medea.prototype.remove = function(key, cb) {
   });
 };
 
+Medea.prototype.listKeys = function() {
+  return Object.keys(this.keydir);
+};
+
+Medea.prototype.mapReduce = function(map, reduce, cb) {
+  var that = this;
+
+  var mapped = {};
+  var mapper = function(key, val) {
+    if (!mapped[key]) mapped[key] = [];
+    mapped[key].push(val);
+  }
+
+  var keys = that.listKeys();
+  var len = keys.length;
+
+  var i = 0;
+  var acc;
+
+  var iterator = function(keys, i, len, cb1) {
+    if (i < len) {
+      that.get(keys[i], function(val) {
+        map(keys[i], val, mapper);
+        iterator(keys, i+1, len, cb1);
+      });
+    } else {
+      Object.keys(mapped).forEach(function(key) {
+        acc = reduce(key, mapped[key]);
+      });
+
+      cb1(acc);
+    }
+  };
+
+  iterator(keys, 0, len, cb);
+};
+
 Medea.prototype.sync = function(cb) {
   fs.fsync(this.active.fd, cb);
 };
