@@ -12,12 +12,12 @@ medea.open(function() {
   var start = Date.now();
   for (var i = 0, len = 130000; i < len; i++) {
     if (i === len - 1) {
-      medea.put('hello' + i, 'valz' + i, function() {
+      medea.put(crc('hello' + i).toString('hex'), 'valz' + i, function() {
         console.log('time:', (Date.now() - start) / 1000, 's');
         medea.close();
       });
     } else {
-      medea.put('hello' + i, 'valz' + i);
+      medea.put(crc('hello' + i).toString('hex'), 'valz' + i);
     }
   }
 });
