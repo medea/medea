@@ -6,6 +6,7 @@ var DataFile = require('./data_file');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
+var RedBlackTree = require('./tree');
 
 var sizes = constants.sizes;
 var headerOffsets = constants.headerOffsets;
@@ -24,7 +25,7 @@ var FileStatus = function() {
 
 var Medea = module.exports = function(options) {
   this.active = null;
-  this.keydir = {};
+  this.keydir = new RedBlackTree();
 
   options = options || {};
 
@@ -363,7 +364,7 @@ Medea.prototype.put = function(k, v, cb) {
         entry.valuePosition = oldOffset + sizes.header + key.length;
         entry.timestamp = ts;
 
-        that.keydir[k] = entry;
+        that.keydir.insert(k, entry);
 
         if (cb) cb();
       });
@@ -384,7 +385,7 @@ Medea.prototype._wrapWriteFileSync = function() {
 };
 
 Medea.prototype.get = function(key, cb) {
-  var entry = this.keydir[key];
+  var entry = this.keydir.find(key);
   if (entry) {
     var readBuffer = new Buffer(entry.valueSize);
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
@@ -420,9 +421,10 @@ Medea.prototype.get = function(key, cb) {
 
 Medea.prototype.remove = function(key, cb) {
   var that = this;
-  this.put(key, tombstone, function(err) {
-    if (that.keydir[key]) {
-      delete that.keydir[key];
+  this.put(key, tombstone, function() {
+    var entry = that.keydir.find(key);
+    if (entry) {
+      that.keydir.remove(key);
     }
 
     if (err) {
