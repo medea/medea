@@ -1,21 +1,6 @@
-var cluster = require('cluster');
-var os = require('os');
 var argo = require('argo-server');
 var Medea = require('./medea');
 
-/*if (cluster.isMaster) {
-  var writerId;
-  for (var i = 0, len = os.cpus().length; i < len; i++) {
-    if (!writerId) {
-      var worker = cluster.fork({ MEDEA_WRITER: true });
-      writerId = worker.id;
-    } else {
-      cluster.fork({ MEDEA_WRITE_HANDLE: writerId });
-    }
-  }
-} else*/ {
-
-  console.log
 var options = {
   maxFileSize: 1024,
 };
@@ -27,7 +12,6 @@ var server = argo()
     handle('request', function(env, next) {
       var key = env.request.url.substr('/bitcask/'.length);
 
-      console.log('received request for', key);
       if (!key.length) {
         env.response.statusCode = 404;
         next(env);
@@ -83,7 +67,10 @@ var server = argo()
   });
 
 medea.open(function() {
-  server.listen(process.env.PORT || 3000);
+  var port = process.env.PORT || 3000;
+  server.listen(port);
+  console.log('Listening on http://localhost:' + port);
+  console.log('keydir length:', Object.keys(medea.keydir).length);
 });
 
 ['SIGTERM','SIGINT'].forEach(function(ev) {
@@ -91,4 +78,3 @@ medea.open(function() {
     medea.close(function() { console.log('closed medea'); process.exit();});
   });
 });
-}

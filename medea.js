@@ -219,50 +219,45 @@ Medea.prototype._scanKeyFiles = function(arr, cb) {
 
   var iterator = function(hintFiles, i, max, cb1) {
     var current = hintFiles[i];
-    console.log('loading', current, 'into keydir...');
 
     var hintHeaderSize = sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset;
 
     var stream = fs.createReadStream(current);
 
-    //var remainingBuffers = [];
-    //var remainingBufferLength;
-
     var waiting = new Buffer(0);
     var curlen = 0;
-    var findlen = -1;
     var lastHeaderBuf;
     var lastKeyLen = -1;
     var state = 'findingHeader';
     
     stream.on('data', function(chunk) {
-      curlen += chunk.length;
-
-      if (curlen < hintHeaderSize) {
-        waiting = Buffer.concat([waiting, chunk]);
-        curlen = waiting.length;
-        return;
-      }
-
-      if (waiting.length) {
-        chunk = Buffer.concat([waiting, chunk]);
-        waiting = new Buffer(0);
-      }
+      curlen = chunk.length;
 
       while (curlen) {
-        if (curlen >= hintHeaderSize && state === 'findingHeader') {
-          var headerBuf = new Buffer(hintHeaderSize);
-
-          /*var headerOfs = 0;
-          if (remainingBuffers.length) {
-            remainingBuffers.push(chunk);
-            remainingBuffers.forEach(function(b) {
-              b.copy(headerBuf, 0, headerOfs, b.length);
-              headerOfs += b.length;
-            });
-          } else*/ {
-            chunk.copy(headerBuf, 0, 0, headerBuf.length);
+        if (waiting.length) {
+          if (!chunk) {
+            chunk = new Buffer(0);
           }
+          chunk = Buffer.concat([waiting, chunk]);
+          curlen = chunk.length;
+          waiting = new Buffer(0);
+        }
+
+        if (curlen < hintHeaderSize && curlen > sizes.crc && state === 'findingHeader') {
+          waiting = chunk;
+          curlen = 0;
+          return;
+        }
+
+
+        if (state === 'headerFound' && lastKeyLen > -1 && curlen < lastKeyLen) {
+          waiting = chunk;
+          curlen = 0;
+          return;
+        }
+
+        if (curlen >= hintHeaderSize && state === 'findingHeader') {
+          var headerBuf = chunk.slice(0, hintHeaderSize);
 
           var keylen = headerBuf.readUInt16BE(sizes.timestamp);
           lastKeyLen = keylen;
@@ -272,22 +267,8 @@ Medea.prototype._scanKeyFiles = function(arr, cb) {
           curlen = chunk.length;
 
           state = 'headerFound';
-        } 
-
-        if (curlen >= lastKeyLen && state === 'headerFound') {
-          // pull entire block
-          
-          var keyBuf = new Buffer(lastKeyLen);
-          var keyOfs = 0;
-          /*if (remainingBuffers.length) {
-            remainingBuffers.push(chunk);
-            remainingBuffers.forEach(function(b) {
-              b.copy(keyBuf, 0, keyOfs, b.length);
-              keyOfs += b.length;
-            });
-          } else*/ {
-            chunk.copy(keyBuf, 0, 0, keyBuf.length);
-          }
+        } else if (curlen >= lastKeyLen && state === 'headerFound') {
+          var keyBuf = chunk.slice(0, lastKeyLen);
 
           var key = keyBuf.toString();
 
@@ -308,21 +289,15 @@ Medea.prototype._scanKeyFiles = function(arr, cb) {
           lastHeaderBuf = null;
 
           state = 'keyFound';
-        }
-
-        if (chunk.length === sizes.crc && state === 'keyFound') {
+        } else if (curlen === sizes.crc && state === 'keyFound') {
           chunk = new Buffer(0);
           curlen = 0;
         } else {
-          waiting = Buffer.concat([waiting, chunk]);
-          curlen = 0;
-          state = 'findingHeader';
+          if (state === 'keyFound') {
+            state = 'findingHeader';
+          }
         }
       }
-
-      /*if (chunk.length) {
-        remainingBuffers.push(chunk);
-      }*/
     });
     
     stream.on('end', function() {
@@ -754,7 +729,7 @@ Medea.prototype._put = function(k, v, offset, cb) {
     var totalSizeField = new Buffer(sizes.totalsize);
 
     var totalSz = key.length + value.length + sizes.header;
-    offsetField.writeDoubleBE(offset, 0);
+    offsetField.writeDoubleBE(that.active.offset, 0);
     totalSizeField.writeUInt32BE(totalSz, 0);
 
     var hintBufs = Buffer.concat([timestamp, keysz, totalSizeField, offsetField, key]);
