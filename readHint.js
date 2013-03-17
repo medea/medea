@@ -10,7 +10,7 @@ var sizes = {
   totalsize: 4
 };
 
-var stream = fs.createReadStream('medea/2.medea.hint');
+var stream = fs.createReadStream('medea/1.medea.hint');
 
 var bufs = [];
 var len = 0;

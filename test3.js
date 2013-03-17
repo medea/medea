@@ -1,7 +1,7 @@
 var Medea = require('./medea');
 
 var options = {
-  maxFileSize: 1000*1000
+  maxFileSize: 1024*1024
 };
 
 var medea = new Medea(options);
