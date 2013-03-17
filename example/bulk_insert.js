@@ -12,13 +12,13 @@ medea.open(function() {
   var start = Date.now();
   for (var i = 0, len = 130000; i < len; i++) {
     if (i === len - 1) {
-      medea.put(crc('hello' + i).toString('hex'), 'valz' + i, function() {
+      medea.put('hello' + i, 'valz' + i, function() {
         console.log('time:', (Date.now() - start) / 1000, 's');
         console.log(medea.keydir);
         medea.close();
       });
     } else {
-      medea.put(crc('hello' + i).toString('hex'), 'valz' + i);
+      medea.put('hello' + i, 'valz' + i);
     }
   }
 });
