@@ -24,6 +24,12 @@ medea.open(function(err) {
 });
 ```
 
+## Install
+
+```bash
+$ npm install medea
+```
+
 ## Usage
 
 ### medea.open([directory], callback)
