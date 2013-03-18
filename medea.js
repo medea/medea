@@ -1,29 +1,12 @@
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
+var constants = require('./constants');
+var fileops = require('./fileops');
+var DataFile = require('./data_file');
+var Lock = require('./lock');
 
-var sizes = {
-  timestamp: 8,
-  keysize: 2,
-  valsize: 4,
-  crc: 4,
-  header: 4 + 8 + 2 + 4, // crc + timestamp + keysize + valsize
-  offset: 16,
-  totalsize: 4
-};
-
-var writeCheck = {
-  fresh: 1,
-  wrap: 2,
-  ok: 3
-};
-
-var fsflags = {
-  O_RDONLY: 0x0,
-  O_CREAT: 0x100,
-  O_EXCL: 0x200,
-  O_RDWR: 0x02,
-  O_SYNC: 0x1000
-};
+var sizes = constants.sizes;
+var writeCheck = constants.writeCheck;
 
 var tombstone = new Buffer('medea_tombstone');
 
@@ -32,27 +15,6 @@ var KeyDirEntry = function() {
   this.valueSize = null;
   this.valuePosition = null;
   this.timestamp = null;
-};
-
-var Lock = function() {
-  this.fd = null;
-  this.type = null;
-  this.filename = null;
-};
-
-Lock.prototype.isWriteFile = function() {
-  return this.type.toLowerCase() === 'write';
-};
-
-var FileInfo = function() {
-  this.filename = null;
-  this.fd = null;
-  this.offset = 0;
-  this.hintFd = null;
-  this.readOnly = true;
-  this.hintCrc = new Buffer(sizes.crc);
-  this.timestamp = null;
-  this.writeLock = null;
 };
 
 var FileStatus = function() {
@@ -126,8 +88,9 @@ Medea.prototype.open = function(dir, options, cb) {
     if (!readOnly) {
       scanFiles(function() {
         that._acquire(dir, 'write', function(err, writeLock) {
-          that._createFile(function(err, file) {
-            that._writeActiveFile(writeLock, file, function() {
+          DataFile.create(that.dirname, function(err, file) {
+            writeLock.writeActiveFile(that.dirname, file, function() {
+              that.active = file;
               if (cb) cb();
             });
           });
@@ -140,60 +103,12 @@ Medea.prototype.open = function(dir, options, cb) {
     }
   }
 
-  this._ensureDir(dir, function(err) {
+  fileops.ensureDir(dir, function(err) {
     if (err) {
       if (cb) cb(err);
     } else {
       next(dir, that.readOnly, cb);
     }
-  });
-};
-
-Medea.prototype._ensureDir = function(dir, cb) {
-  fs.stat(dir, function(err, stat) {
-    if (!stat) {
-      fs.mkdir(dir, function(err) {
-        if (err) {
-          cb(err);
-          return;
-        }
-        if (cb) cb();
-      });
-    } else {
-      if (cb) cb();
-    }
-  });
-};
-
-Medea.prototype._listDataFiles = function(writeFile, mergeFile, cb) {
-  var that = this;
-  this._dataFileTstamps(function(err, tstamps) {
-    if (err) {
-      cb(err);
-      return;
-    }
-
-    var sorted = tstamps.sort(function(a, b) {
-      if (a > b) return -1;
-      if (a < b) return 1;
-      return 0;
-    });
-
-    [writeFile, mergeFile].forEach(function(f) {
-      if (f) {
-        var n = f.replace('.medea.data', '');
-        var index = sorted.indexOf(n);
-        if (index !== -1) {
-          delete sorted[index];
-        }
-      }
-    });
-
-    var ret = sorted.map(function(t) {
-      return that.dirname + '/' + t + '.medea.data';
-    });
-
-    cb(null, ret);
   });
 };
 
@@ -308,106 +223,28 @@ Medea.prototype._scanKeyFiles = function(arr, cb) {
 
 Medea.prototype._getReadableFiles = function(cb) {
   var that = this;
-  var writingFile = this._readActiveFile('write', function(err, writeFile) {
-    var mergingFile = that._readActiveFile('merge', function(err, mergeFile) {
+  var writingFile = Lock.readActiveFile(this.dirname, 'write', function(err, writeFile) {
+    var mergingFile = Lock.readActiveFile(that.dirname, 'merge', function(err, mergeFile) {
       // TODO: Filter out files marked for deletion by successful merge.
-      that._listDataFiles(writeFile, mergeFile, function(err, files) {
+      fileops.listDataFiles(that.dirname, writeFile, mergeFile, function(err, files) {
         cb(null, files);
       });
     });
   });
 };
 
-Medea.prototype._readActiveFile = function(type, cb) {
-  var filename = this.dirname + '/medea.' + type + '.lock';
-  this._acquireLock(filename, false, function(err, lock) {
-    if (err) {
-      cb(err);
-      return;
-    }
-
-    var bufs = [];
-    var len = 0;
-    var ondata = function(chunk) {
-      bufs.push(chunk);
-      len += chunk.length;
-    };
-
-    var onend = function(lockFd) {
-      return function() {
-        if (!bufs || !bufs.length) {
-          cb(null, '');
-          return;
-        };
-        var all = new Buffer(len);
-        var offset = 0;
-        bufs.forEach(function(buf) {
-          buf.copy(all, 0, offset, buf.length);
-          offset += buf.length;
-        });
-
-        var text = all.toString();
-
-        var arr = text.replace('\n', '').split(' ');
-
-        // release lock?
-        if (arr.length && arr[1]) {
-          cb(null, arr[1]);
-        } else {
-          cb(null, '');
-        }
-      };
-    };
-
-    var stream = fs.createReadStream(filename, { fd: lock.fd });
-    stream.on('data', ondata);
-    stream.on('end', onend(lock.fd));
-    stream.on('error', function(err) {
-      cb(err);
-    });
-
-    stream.resume();
-  });
-};
-
-Medea.prototype._writeActiveFile = function(writeLock, file, cb) {
-  if (file) {
-    this.active = file;
-  }
-
-  var filename = file ? file.filename : '';
-  var lockfile = this.dirname + '/medea.write.lock';
-  var stream = fs.createWriteStream(lockfile, { fd: writeLock.fd, start: 0 });
-  stream.write(process.pid + ' ' + (filename || '') + '\n', function(err) {
-    if (err) {
-      console.log('Error on writing active file to write lock.', err);
-    }
-    cb(null);
-  });
-};
-
-Medea.prototype._writeActiveFileSync = function(writeLock, file) {
-  if (file) {
-    this.active = file;
-  }
-
-  var filename = file ? file.filename : '';
-  var lockfile = this.dirname + '/medea.write.lock';
-
-  var buf = new Buffer(process.pid + ' ' + (filename || '') + '\n');
-  fs.writeSync(writeLock.fd, buf, 0, buf.length, 0);
-};
 
 Medea.prototype._acquire = function(dir, type, cb) {
   var filename = dir + '/medea.' + type + '.lock';
 
   var that = this;
   var writeFile = function() {
-    that._acquireLock(filename, true, function(err, writeLock) {
+    Lock.acquire(filename, true, function(err, writeLock) {
       if (err) {
         console.log('Error on acquiring write lock.', err);
       }
-      that._writeActiveFile(writeLock, null, function(err) {
+      that.writeLock = writeLock;
+      that.writeLock.writeActiveFile(that.dirname, null, function(err) {
         if (err) {
           console.log('Error on writing active file:', err);
         }
@@ -463,7 +300,7 @@ Medea.prototype._acquire = function(dir, type, cb) {
     };
   };
 
-  this._acquireLock(filename, false, function(err, writeLock) {
+  Lock.acquire(filename, false, function(err, writeLock) {
     if (err) {
       if (err.code === 'ENOENT') {
         // this is okay.  move on.
@@ -473,6 +310,9 @@ Medea.prototype._acquire = function(dir, type, cb) {
       cb(err);
       return;
     }
+
+    this.writeLock = writeLock;
+
     var stream = fs.createReadStream(filename, { fd: writeLock.fd });
     stream.on('data', ondata);
     stream.on('end', onend(writeLock.fd));
@@ -482,47 +322,6 @@ Medea.prototype._acquire = function(dir, type, cb) {
 
     stream.resume();
   });
-};
-
-Medea.prototype._acquireLock = function(filename, isWriteLock, cb) {
-  var writeLockFlags = fsflags.O_CREAT | fsflags.O_EXCL | fsflags.O_RDWR | fsflags.O_SYNC;
-
-  var flags = isWriteLock ? writeLockFlags : fsflags.O_RDONLY;
-
-  var that = this;
-
-  fs.open(filename, flags, 0600, function(err, fd) {
-    if (err) {
-      cb(err);
-      return;
-    }
-
-    var writeLock = new Lock();
-    writeLock.filename = filename;
-    writeLock.type = 'write';
-    writeLock.fd = fd;
-    that.writeLock = writeLock;
-
-    cb(null, writeLock);
-  });
-};
-
-Medea.prototype._open = function(file, cb) {
-  fs.open(file.filename, 'a+', function(err, value) {
-    if (err) {
-      cb(err);
-      return;
-    }
-
-    file.fd = value;
-    cb(null, file);
-  });
-};
-
-Medea.prototype._openSync = function(file) {
-  var fd = fs.openSync(file.filename, 'a+');
-  file.fd = fd;
-  return file;
 };
 
 Medea.prototype._checkWrite = function() {
@@ -537,7 +336,7 @@ Medea.prototype._checkWrite = function() {
 
 Medea.prototype.close = function(cb) {
   var that = this;
-  that._closeForWriting(this.active, function() {
+  this.active.closeForWriting(function() {
     fs.unlink(that.writeLock.filename, function(err) {
       fs.close(that.writeLock.fd, function() {
         if (cb) cb();
@@ -546,205 +345,8 @@ Medea.prototype.close = function(cb) {
   });
 };
 
-Medea.prototype._closeForWriting = function(file, cb) {
-  if (!file || file.offset === 0 || file.readOnly) {
-    if (cb) cb();
-    return;
-  }
-
-  var that = this;
-  if (file.hintFd) {
-    this._closeHintFile(file, function() {
-      if (cb) cb();
-    });
-  } else {
-    if (cb) cb();
-  }
-};
-
-Medea.prototype._closeForWritingSync = function(file) {
-  if (!file || file.offset === 0 || file.readOnly) {
-    return;
-  }
-
-  if (file.hintFd) {
-    this._closeHintFileSync();
-  }
-};
-
-Medea.prototype._closeHintFile = function(file, cb) {
-  if (!file.hintFd || file.closingHintFile) {
-    if (cb) cb();
-    return;
-  }
-  file.closingHintFile = true;
-  var hintFilename = this.dirname + '/' + file.timestamp + '.medea.hint';
-  
-  var crcBuf = new Buffer(sizes.crc);
-  file.hintCrc.copy(crcBuf, 0, 0, file.hintCrc.length);
-
-  var that = this;
-  this._write(hintFilename, file.hintFd, crcBuf, function() {
-    fs.fsync(file.hintFd, function(err) {
-      if (err) {
-        console.log('Error fsyncing hint file during close.', err);
-        if (cb) cb(err);
-        return;
-      }
-      fs.close(file.hintFd, function(err) {
-        file.hintFd = null;
-        file.hintCrc = new Buffer(sizes.crc);
-        if (cb) cb();
-      });
-    });
-  });
-};
-
-Medea.prototype._closeHintFileSync = function(file) {
-  if (!file.hintFd || file.closingHintFile) {
-    if (cb) cb();
-    return;
-  }
-  file.closingHintFile = true;
-  var hintFilename = this.dirname + '/' + file.timestamp + '.medea.hint';
-  
-  var crcBuf = new Buffer(sizes.crc);
-  file.hintCrc.copy(crcBuf, 0, 0, file.hintCrc.length);
-
-  var that = this;
-  this._writeSync(hintFilename, file.hintFd, crcBuf);
-  fs.fsyncSync(file.hintFd);
-  fs.closeSync(file.hintFd);
-  file.hintFd = null;
-  file.hintCrc = new Buffer(sizes.crc);
-};
-
 Medea.prototype.put = function(k, v, cb) {
   this._put(k, v, cb);
-};
-
-Medea.prototype._createFile = function(cb) {
-  var that = this;
-  this._mostRecentTstamp(function(err, stamp) {
-    stamp = stamp + 1;
-    var filename = that.dirname + '/' + stamp + '.medea.data';
-    var file = new FileInfo();
-    file.filename = filename;
-    that._ensureDir(that.dirname, function(err) {
-      that._open(file, function(err, val1) {
-        if (err) {
-          cb(err);
-          return;
-        }
-        var hintFilename = that.dirname + '/' + stamp + '.medea.hint';
-        var hintFile = new FileInfo();
-        hintFile.filename = hintFilename;
-        that._open(hintFile, function(err, val2) {
-          if (err) {
-            cb(err)
-            return;
-          }
-
-          file.readOnly = false;
-          file.fd = val1.fd;
-          file.hintFd = val2.fd;
-          file.offset = 0;
-          file.timestamp = stamp;
-
-          if (cb) cb(null, file);
-        });
-      });
-    });
-  });
-};
-
-Medea.prototype._createFileSync = function() {
-  var stamp = this._mostRecentTstampSync();
-  //var stamp = this.active.stamp;
-  stamp = stamp + 1;
-  var filename = this.dirname + '/' + stamp + '.medea.data';
-  var file = new FileInfo();
-  file.filename = filename;
-  var val1 = this._openSync(file)
-
-  var hintFilename = this.dirname + '/' + stamp + '.medea.hint';
-  var hintFile = new FileInfo();
-  hintFile.filename = hintFilename;
-  var val2 = this._openSync(hintFile);
-
-  file.readOnly = false;
-  file.fd = val1.fd;
-  file.hintFd = val2.fd;
-  file.offset = 0;
-  file.timestamp = stamp;
-
-  return file;
-};
-
-Medea.prototype._dataFileTstamps = function(cb) {
-  fs.readdir(this.dirname, function(err, files) {
-    if (err) {
-      cb(err);
-      return;
-    }
-
-    var tstamps = [];
-    
-    files.forEach(function(file) {
-      var match = file.match(/^([0-9]+).medea.data/);
-      if (match && match.length && match[1]) {
-        tstamps.push(Number(match[1]));
-      }
-    }); 
-
-    cb(null, tstamps);
-  });
-};
-
-Medea.prototype._dataFileTstampsSync = function() {
-  var files = fs.readdirSync(this.dirname);
-  var tstamps = [];
-
-  files.forEach(function(file) {
-    var match = file.match(/^([0-9]+).medea.data/);
-    if (match && match.length && match[1]) {
-      tstamps.push(Number(match[1]));
-    }
-  }); 
-    
-  return tstamps;
-};
-
-Medea.prototype._mostRecentTstamp = function(cb) {
-  this._dataFileTstamps(function(err, stamps) {
-    if (err) {
-      cb(err);
-      return;
-    }
-
-    if (stamps.length) {
-      cb(null, stamps.sort(function(a, b) {
-        if (a > b) return - 1;
-        if (a < b) return 1;
-        return 0;
-      })[0]);
-    } else {
-      cb(null, 0);
-    }
-  });
-};
-
-Medea.prototype._mostRecentTstampSync = function() {
-  var stamps = this._dataFileTstampsSync();
-  if (stamps.length) {
-    return stamps.sort(function(a, b) {
-      if (a > b) return -1;
-      if (a < b) return 1;
-      return 0;
-    })[0];
-  } else {
-    return 0;
-  }
 };
 
 Medea.prototype._put = function(k, v, cb) {
@@ -773,7 +375,6 @@ Medea.prototype._put = function(k, v, cb) {
   next(function(err, file) {
     var ts = Date.now();
 
-
     var crc = new Buffer(sizes.crc);
     var timestamp = new Buffer(sizes.timestamp);
     var keysz = new Buffer(sizes.keysize);
@@ -792,7 +393,7 @@ Medea.prototype._put = function(k, v, cb) {
 
     var line = Buffer.concat([crc, bufs]);
 
-    that._write(file.filename, file.fd, line, function() {
+    file.write(line, function() {
       var oldOffset = file.offset;
       file.offset = file.offset + line.length;
       var offsetField = new Buffer(sizes.offset);
@@ -804,7 +405,7 @@ Medea.prototype._put = function(k, v, cb) {
 
       var hintBufs = Buffer.concat([timestamp, keysz, totalSizeField, offsetField, key]);
 
-      that._write(that.dirname + '/' + file.timestamp + '.medea.hint', file.hintFd, hintBufs, function() {
+      file.writeHintFile(hintBufs, function() {
         file.hintCrc = crc32(hintBufs, file.hintCrc);
 
         var entry = new KeyDirEntry();
@@ -834,12 +435,13 @@ Medea.prototype._wrapWriteFile = function(cb) {
   var oldFile = this.active;
 
   var that = this;
-  that._createFile(function(err, file) {
+  DataFile.create(this.dirname, function(err, file) {
     if (err) {
       console.log('Error wrapping file.', err);
     }
-    that._writeActiveFile(that.writeLock, file, function() {
-      that._closeForWriting(oldFile, function() {
+    that.writeLock.writeActiveFile(that.dirname, file, function() {
+      that.active = file;
+      oldFile.closeForWriting(function() {
         that.bytesToBeWritten = 0;
         if (cb) cb(null, file);
       });
@@ -850,28 +452,12 @@ Medea.prototype._wrapWriteFile = function(cb) {
 Medea.prototype._wrapWriteFileSync = function() {
   var oldFile = this.active;
   this.isWrapping = true;
-  var file = this._createFileSync();
-  this._writeActiveFileSync(this.writeLock, file);
-  this._closeForWritingSync(oldFile);
+  var file = DataFile.createSync(this.dirname);
+  this.writeLock.writeActiveFileSync(this.dirname, file);
+  this.active = file;
+  oldFile.closeForWritingSync();
   this.bytesToBeWritten = 0;
   return file;
-};
-
-Medea.prototype._fileTimestamp = function(file) {
-  var f = file.replace('\\', '/');
-  var lastSlashLocation = file.lastIndexOf('/');
-  var dotLocation = file.indexOf('.');
-  var ts = file.substring(lastSlashLocation+1, dotLocation);
-  return Number(ts);
-};
-
-Medea.prototype._write = function(filename, fd, bufs, cb) {
-  var stream = fs.createWriteStream(filename, { flags: 'a', fd: fd });
-  stream.write(bufs, cb);
-};
-
-Medea.prototype._writeSync = function(filename, fd, bufs) {
-  return fs.writeSync(fd, bufs, 0, bufs.length, 0);
 };
 
 Medea.prototype.get = function(key, cb) {
