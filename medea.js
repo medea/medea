@@ -3,19 +3,14 @@ var crc32 = require('buffer-crc32');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataFile = require('./data_file');
+var HintFileParser = require('./hint_file_parser');
+var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
 
 var sizes = constants.sizes;
 var writeCheck = constants.writeCheck;
 
 var tombstone = new Buffer('medea_tombstone');
-
-var KeyDirEntry = function() {
-  this.fileId = null;
-  this.valueSize = null;
-  this.valuePosition = null;
-  this.timestamp = null;
-};
 
 var FileStatus = function() {
   this.filename = null;
@@ -113,112 +108,7 @@ Medea.prototype.open = function(dir, options, cb) {
 };
 
 Medea.prototype._scanKeyFiles = function(arr, cb) {
-  if (arr.length === 0) {
-    cb();
-    return;
-  }
-
-  var that = this;
-
-  var hintFiles = arr.map(function(f) {
-    return f.replace('.medea.data', '.medea.hint');
-  });
-
-  var iterator = function(hintFiles, i, max, cb1) {
-    var current = hintFiles[i];
-
-    var hintHeaderSize = sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset;
-
-    var stream = fs.createReadStream(current);
-
-    var waiting = new Buffer(0);
-    var curlen = 0;
-    var lastHeaderBuf;
-    var lastKeyLen = -1;
-    var state = 'findingHeader';
-    
-    stream.on('data', function(chunk) {
-      curlen = chunk.length;
-
-      while (curlen) {
-        if (waiting.length) {
-          if (!chunk) {
-            chunk = new Buffer(0);
-          }
-          chunk = Buffer.concat([waiting, chunk]);
-          curlen = chunk.length;
-          waiting = new Buffer(0);
-        }
-
-        if (curlen < hintHeaderSize && curlen > sizes.crc && state === 'findingHeader') {
-          waiting = chunk;
-          curlen = 0;
-          return;
-        }
-
-
-        if (state === 'headerFound' && lastKeyLen > -1 && curlen < lastKeyLen) {
-          waiting = chunk;
-          curlen = 0;
-          return;
-        }
-
-        if (curlen >= hintHeaderSize && state === 'findingHeader') {
-          var headerBuf = chunk.slice(0, hintHeaderSize);
-
-          var keylen = headerBuf.readUInt16BE(sizes.timestamp);
-          lastKeyLen = keylen;
-          lastHeaderBuf = headerBuf;
-
-          chunk = chunk.slice(headerBuf.length);
-          curlen = chunk.length;
-
-          state = 'headerFound';
-        } else if (curlen >= lastKeyLen && state === 'headerFound') {
-          var keyBuf = chunk.slice(0, lastKeyLen);
-
-          var key = keyBuf.toString();
-
-          var fileId = Number(current.replace(that.dirname + '/', '').replace('.medea.hint', ''));
-          if (!that.keydir[key] || (that.keydir[key] && that.keydir[key].fileId === fileId)) {
-            var entry = new KeyDirEntry();
-            entry.key = key;
-            entry.fileId = fileId;
-            entry.timestamp = lastHeaderBuf.readDoubleBE(0);
-            entry.valueSize = lastHeaderBuf.readUInt32BE(sizes.timestamp + sizes.keysize) - key.length - sizes.header;
-            entry.valuePosition = lastHeaderBuf.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize) + sizes.header + key.length;
-            that.keydir[key] = entry;
-          }
-
-          chunk = chunk.slice(lastKeyLen);
-          curlen = chunk.length;
-          lastKeyLen = -1;
-          lastHeaderBuf = null;
-
-          state = 'keyFound';
-        } else if (curlen === sizes.crc && state === 'keyFound') {
-          chunk = new Buffer(0);
-          curlen = 0;
-        } else {
-          if (state === 'keyFound') {
-            state = 'findingHeader';
-          }
-        }
-      }
-    });
-    
-    stream.on('end', function() {
-      if (i === max) {
-        cb1();
-      } else {
-        iterator(hintFiles, i+1, max, cb1);
-      }
-    });
-  };
-
-  iterator(hintFiles, 0, hintFiles.length - 1, function(err) {
-    cb();
-  });
+  HintFileParser.parse(this.dirname, arr, this.keydir, cb);
 };
 
 Medea.prototype._getReadableFiles = function(cb) {
@@ -422,33 +312,6 @@ Medea.prototype._put = function(k, v, cb) {
   });
 };
 
-// This differs in order from Erlang Bitcask.
-// This may cause files to go slightly over max file size, 
-// but it allows for fast async behavior without blocking.
-//
-// 1. Create new wrapped file.
-// 2. Switch active record to new file.
-// 3. Close for writing.
-//
-// Deprecated for _wrapWriteFileSync
-Medea.prototype._wrapWriteFile = function(cb) {
-  var oldFile = this.active;
-
-  var that = this;
-  DataFile.create(this.dirname, function(err, file) {
-    if (err) {
-      console.log('Error wrapping file.', err);
-    }
-    that.writeLock.writeActiveFile(that.dirname, file, function() {
-      that.active = file;
-      oldFile.closeForWriting(function() {
-        that.bytesToBeWritten = 0;
-        if (cb) cb(null, file);
-      });
-    });
-  });
-};
-
 Medea.prototype._wrapWriteFileSync = function() {
   var oldFile = this.active;
   this.isWrapping = true;
@@ -559,13 +422,15 @@ Medea.prototype.mapReduce = function(options, cb) {
         });
 
         Object.keys(remapped).forEach(function(key) {
-          if (!startKey || (key >= startKey)) {
+          if ((!startKey || (item.key >= startKey)) &&
+              (!endKey || item.key <= endKey)) {
             acc = reduce(key, remapped[key]);
           }
         });
       } else {
         mapped.forEach(function(item) {
-          if (!startKey || (item.key >= startKey)) {
+          if ((!startKey || (item.key >= startKey)) &&
+              (!endKey || item.key <= endKey)) {
             acc = reduce(item.key, item.value);
           }
         });
@@ -576,12 +441,6 @@ Medea.prototype.mapReduce = function(options, cb) {
   };
 
   iterator(keys, 0, len, cb);
-};
-
-Medea.prototype.view = function(name, options) {
-  var group = options.hasOwnProperty('group') ? options.group : false;
-  var startKey = options.startKey;
-  var endKey = options.endKey;
 };
 
 Medea.prototype.sync = function(cb) {
