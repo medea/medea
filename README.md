@@ -5,7 +5,7 @@ A lightweight key-value storage library.
 * Can be embedded in Node.js applications.
 * Support for basic get, put, and remove operations.
 * Heavily inspired by Basho's [Bitcask](https://github.com/basho/bitcask) key-value database.
-* Values can be any `Buffer`.
+* Values can be any string or `Buffer`.
 
 ## Example
 
