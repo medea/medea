@@ -923,14 +923,31 @@ Medea.prototype.listKeys = function() {
   return Object.keys(this.keydir);
 };
 
-Medea.prototype.mapReduce = function(map, reduce, cb) {
+var MappedItem = function() {
+  this.recordKey = null;
+  this.key = null;
+  this.value = null;
+};
+
+Medea.prototype.mapReduce = function(options, cb) {
   var that = this;
 
-  var mapped = {};
-  var mapper = function(key, val) {
-    if (!mapped[key]) mapped[key] = [];
-    mapped[key].push(val);
-  }
+  var map = options.map;
+  var reduce = options.reduce;
+  var group = options.hasOwnProperty('group') ? options.group : false;
+  var startKey = options.startKey;
+  var endKey = options.endKey;
+
+  var mapped = [];
+  var mapper = function(recordKey) {
+    return function(key, val) {
+      var item = new MappedItem();
+      item.recordKey = recordKey;
+      item.key = key;
+      item.value = val;
+      mapped.push(item);
+    }
+  };
 
   var keys = that.listKeys();
   var len = keys.length;
@@ -941,19 +958,44 @@ Medea.prototype.mapReduce = function(map, reduce, cb) {
   var iterator = function(keys, i, len, cb1) {
     if (i < len) {
       that.get(keys[i], function(val) {
-        map(keys[i], val, mapper);
+        map(keys[i], val, mapper(keys[i]));
         iterator(keys, i+1, len, cb1);
       });
     } else {
-      Object.keys(mapped).forEach(function(key) {
-        acc = reduce(key, mapped[key]);
-      });
+      if (!group) {
+        var remapped = {};
+        mapped.forEach(function(item) {
+          if (!remapped[item.key]) {
+            remapped[item.key] = [];
+          }
+
+          remapped[item.key].push(item.value);
+        });
+
+        Object.keys(remapped).forEach(function(key) {
+          if (!startKey || (key >= startKey)) {
+            acc = reduce(key, remapped[key]);
+          }
+        });
+      } else {
+        mapped.forEach(function(item) {
+          if (!startKey || (item.key >= startKey)) {
+            acc = reduce(item.key, item.value);
+          }
+        });
+      }
 
       cb1(acc);
     }
   };
 
   iterator(keys, 0, len, cb);
+};
+
+Medea.prototype.view = function(name, options) {
+  var group = options.hasOwnProperty('group') ? options.group : false;
+  var startKey = options.startKey;
+  var endKey = options.endKey;
 };
 
 Medea.prototype.sync = function(cb) {
