@@ -5,6 +5,7 @@ A lightweight key-value storage library.
 * Can be embedded in Node.js applications.
 * Support for basic get, put, and remove operations.
 * Heavily inspired by Basho's [Bitcask](https://github.com/basho/bitcask) key-value database.
+* Values can be any `Buffer`.
 
 ## Example
 
@@ -82,6 +83,10 @@ See `examples/map_reduce.js` for an example.
 ## Limitations
 
 Currently, multiple processes cannot access the same data directory.  Run one process per directory.
+
+Repeated use leads to fragmentation and empty files. A merge process needs to be run for cleanup, but that piece has yet to be developed.
+
+This software is still in an early, experimental phase.  Feedback, issues, and pull requests are welcome. :)
 
 ## License
 
