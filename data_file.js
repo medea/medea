@@ -81,12 +81,18 @@ DataFile.createSync = function(dirname) {
 
 DataFile.prototype.write = function(bufs, cb) {
   var stream = fs.createWriteStream(this.filename, { flags: 'a', fd: this.fd });
+  stream.on('error', function(err) {
+    if (cb) cb(err);
+  });
   stream.write(bufs, cb);
 };
 
 DataFile.prototype.writeHintFile = function(bufs, cb) {
   var filename = this.dirname + '/' + this.timestamp + '.medea.hint'
   var stream = fs.createWriteStream(filename, { flags: 'a', fd: this.hintFd });
+  stream.on('error', function(err) {
+    if (cb) cb(err);
+  });
   stream.write(bufs, cb);
 };
 

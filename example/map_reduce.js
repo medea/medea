@@ -1,4 +1,4 @@
-var Medea = require('./medea');
+var Medea = require('../');
 var medea = new Medea();
 
 medea.open(function() {

@@ -236,10 +236,6 @@ Medea.prototype.close = function(cb) {
 };
 
 Medea.prototype.put = function(k, v, cb) {
-  this._put(k, v, cb);
-};
-
-Medea.prototype._put = function(k, v, cb) {
   if (!(k instanceof Buffer)) {
     k = new Buffer(k.toString());
   }
@@ -283,7 +279,12 @@ Medea.prototype._put = function(k, v, cb) {
 
     var line = Buffer.concat([crc, bufs]);
 
-    file.write(line, function() {
+    file.write(line, function(err) {
+      if (err) {
+        if (cb) cb(err);
+        return;
+      }
+
       var oldOffset = file.offset;
       file.offset = file.offset + line.length;
       var offsetField = new Buffer(sizes.offset);
@@ -295,7 +296,11 @@ Medea.prototype._put = function(k, v, cb) {
 
       var hintBufs = Buffer.concat([timestamp, keysz, totalSizeField, offsetField, key]);
 
-      file.writeHintFile(hintBufs, function() {
+      file.writeHintFile(hintBufs, function(err) {
+        if (err) {
+          if (cb) cb(err);
+          return;
+        }
         file.hintCrc = crc32(hintBufs, file.hintCrc);
 
         var entry = new KeyDirEntry();
@@ -346,12 +351,17 @@ Medea.prototype.get = function(key, cb) {
       });
 
       if (val.toString() !== tombstone.toString()) {
-        cb(val);
+        cb(null, val);
       } else {
         if (cb) cb();
       }
 
     });
+
+    stream.on('error', function(err) {
+      cb(err);
+    });
+
   } else {
     if (cb) cb();
   }
@@ -359,12 +369,16 @@ Medea.prototype.get = function(key, cb) {
 
 Medea.prototype.remove = function(key, cb) {
   var that = this;
-  this.put(key, tombstone, function() {
+  this.put(key, tombstone, function(err) {
     if (that.keydir[key]) {
       delete that.keydir[key];
     }
 
-    if(cb) cb();
+    if (err) {
+      if (cb) cb(err);
+    } else {
+      if(cb) cb();
+    }
   });
 };
 

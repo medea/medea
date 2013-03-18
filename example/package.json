@@ -1,0 +1,17 @@
+{
+  "name": "medea-examples",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Examples for medea key-value store.",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": "",
+  "author": "Kevin Swiber <kswiber@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "msgpack-js": "~0.1.5",
+    "argo-server": "~0.1.3"
+  }
+}

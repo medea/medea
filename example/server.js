@@ -1,16 +1,12 @@
 var argo = require('argo-server');
-var Medea = require('./medea');
+var Medea = require('../');
 
-var options = {
-  maxFileSize: 1024,
-};
-
-var medea = new Medea(options);
+var medea = new Medea();
 
 var server = argo()
-  .get('/bitcask', function(handle) {
+  .get('/medea', function(handle) {
     handle('request', function(env, next) {
-      var key = env.request.url.substr('/bitcask/'.length);
+      var key = env.request.url.substr('/medea/'.length);
 
       if (!key.length) {
         env.response.statusCode = 404;
@@ -18,7 +14,7 @@ var server = argo()
         return;
       }
       
-      medea.get(key, function(val) {
+      medea.get(key, function(err, val) {
         if (!val) {
           env.response.statusCode = 404;
           next(env);
@@ -30,9 +26,9 @@ var server = argo()
       });
     });
   })
-  .put('/bitcask', function(handle) {
+  .put('/medea', function(handle) {
     handle('request', function(env, next) {
-      var key = env.request.url.substr('/bitcask/'.length);
+      var key = env.request.url.substr('/medea/'.length);
 
       if (!key.length) {
         env.response.statusCode = 404;
@@ -48,9 +44,9 @@ var server = argo()
       });
     });
   })
-  .del('/bitcask', function(handle) {
+  .del('/medea', function(handle) {
     handle('request', function(env, next) {
-      var key = env.request.url.substr('/bitcask/'.length);
+      var key = env.request.url.substr('/medea/'.length);
 
       if (!key.length) {
         env.response.statusCode = 404;

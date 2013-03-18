@@ -1,7 +1,7 @@
 {
   "name": "medea",
-  "version": "0.0.0",
-  "description": "Key-value store.",
+  "version": "0.0.1",
+  "description": "A lightweight key-value storage library.",
   "main": "medea.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,7 +10,6 @@
   "author": "Kevin Swiber <kswiber@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "msgpack-js": "~0.1.5",
     "buffer-crc32": "~0.2.1"
   }
 }

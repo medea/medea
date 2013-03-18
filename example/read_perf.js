@@ -1,4 +1,4 @@
-var Medea = require('./medea');
+var Medea = require('../');
 var medea = new Medea({ readOnly: true });
 
 var num = 1000;
