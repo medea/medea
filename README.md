@@ -17,7 +17,7 @@ var medea = new Medea();
 medea.open(function(err) {
   medea.put('hello', 'world!', function(err) {
     medea.get('hello', function(err, val) {
-      console.log(val);
+      console.log(val.toString());
       medea.close();
     });
   });
