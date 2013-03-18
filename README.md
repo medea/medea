@@ -51,11 +51,13 @@ Stores a value in the database.
 
 `callback`: function that takes an error parameter
 
-### medea.remove(key)
+### medea.remove(key, callback)
 
 Removes an entry from the database.
 
 `key`: identifier for the item to remove
+
+`callback`: Takes one error parameter.
 
 ### medea.sync(callback)
 
