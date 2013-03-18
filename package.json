@@ -6,10 +6,26 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": "",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/argo/medea.git"
+  },
   "author": "Kevin Swiber <kswiber@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "buffer-crc32": "~0.2.1"
-  }
+  },
+  "readmeFilename": "README.md",
+  "gitHead": "c943892dee98ea8f0ae518e286ac9a26e844b21c",
+  "directories": {
+    "example": "example"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "key",
+    "value",
+    "store",
+    "database",
+    "javascript"
+  ]
 }
