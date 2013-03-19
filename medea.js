@@ -385,8 +385,14 @@ Medea.prototype._wrapWriteFileSync = function() {
 };
 
 Medea.prototype.get = function(key, cb) {
-  var entry = this.keydir.find(key);
-  if (entry) {
+  var entry = this.keydir.find(key, function(a, b) {
+    var a1 = a.toString();
+    var b1 = b ? b.toString() : '';
+    if (a1 < b1) return -1;
+    if (a1 > b1) return 1;
+    return 0;
+  });
+  if (entry && entry.value) {
     entry = entry.value;
     var readBuffer = new Buffer(entry.valueSize);
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
