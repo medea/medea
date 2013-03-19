@@ -227,11 +227,27 @@ Medea.prototype._checkWrite = function() {
 Medea.prototype.close = function(cb) {
   var that = this;
   this.active.closeForWriting(function() {
-    fs.unlink(that.writeLock.filename, function(err) {
-      fs.close(that.writeLock.fd, function() {
-        if (cb) cb();
+    if (that.active.offset === 0 && that.bytesToBeWritten === 0) {
+      fs.unlink(that.active.filename, function(err) {
+        fs.close(that.active.fd, function() {
+          fs.unlink(that.active.filename.replace('.data', '.hint'), function(err) {
+            fs.close(that.active.hintFd, function() {
+              fs.unlink(that.writeLock.filename, function(err) {
+                fs.close(that.writeLock.fd, function() {
+                  if (cb) cb();
+                });
+              });
+            });
+          });
+        });
       });
-    });
+    } else {
+      fs.unlink(that.writeLock.filename, function(err) {
+        fs.close(that.writeLock.fd, function() {
+          if (cb) cb();
+        });
+      });
+    }
   });
 };
 
