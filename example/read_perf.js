@@ -2,7 +2,7 @@ var Medea = require('../');
 var medea = new Medea({ readOnly: true });
 
 var num = 100000;
-var iterations = 1;
+var iterations = 3;
 
 medea.open(function() {
   var ids = new Array(num);
@@ -15,7 +15,7 @@ medea.open(function() {
   var counter = 0;
   for (var j = 0; j < iterations; j++) {
     for (var i = 0, len = ids.length; i < len; i++) {
-      medea.get('hello' + ids[i], function(val) {
+      medea.get('hello' + ids[i], function(err, val) {
         counter++
         if (counter === num * iterations) {
           var end = Date.now() - start;
