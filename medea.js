@@ -13,7 +13,7 @@ var headerOffsets = constants.headerOffsets;
 var writeCheck = constants.writeCheck;
 
 var tombstone = new Buffer('medea_tombstone');
-
+ 
 var FileStatus = function() {
   this.filename = null;
   this.fragmented = null;
