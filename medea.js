@@ -1,4 +1,4 @@
-var fs = require('fs');
+var fs = require('fs'); 
 var crc32 = require('buffer-crc32'); 
 var constants = require('./constants');
 var fileops = require('./fileops');
