@@ -32,28 +32,47 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
   var state = 'findingHeader';
 
   stream.on('data', function(chunk) {
+    stream.pause();
+
     curlen = chunk.length;
 
-    while (curlen) {
-      if (waiting.length) {
-        if (!chunk) {
-          chunk = new Buffer(0);
-        }
-        chunk = Buffer.concat([waiting, chunk]);
-        curlen = chunk.length;
-        waiting = new Buffer(0);
+    if (waiting.length) {
+      if (!chunk) {
+        chunk = new Buffer(0);
       }
+      chunk = Buffer.concat([waiting, chunk]);
+      curlen = chunk.length;
+      waiting = new Buffer(0);
+    }
 
-      if (curlen < hintHeaderSize && curlen > sizes.crc && state === 'findingHeader') {
+    while (curlen) {
+      if (curlen < sizes.crc && state === 'keyFound') {
         waiting = chunk;
+        chunk = new Buffer(0);
         curlen = 0;
+        stream.resume();
         return;
       }
 
+      if (curlen > sizes.crc && state === 'keyFound') {
+        state = 'findingHeader';
+      }
+
+
+      if (curlen < hintHeaderSize && curlen > sizes.crc && (state === 'findingHeader')) {
+        waiting = chunk;
+        chunk = new Buffer(0);
+        curlen = 0;
+        state = 'findingHeader';
+        stream.resume();
+        return;
+      }
 
       if (state === 'headerFound' && lastKeyLen > -1 && curlen < lastKeyLen) {
         waiting = chunk;
+        chunk = new Buffer(0);
         curlen = 0;
+        stream.resume();
         return;
       }
 
@@ -65,6 +84,7 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
         lastHeaderBuf = headerBuf;
 
         chunk = chunk.slice(headerBuf.length);
+        waiting = new Buffer(0);
         curlen = chunk.length;
 
         state = 'headerFound';
@@ -90,15 +110,22 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
         lastHeaderBuf = null;
 
         state = 'keyFound';
-      } else if (curlen === sizes.crc && state === 'keyFound') {
+      } else if (curlen === sizes.crc && (state === 'keyFound')) {
+        waiting = chunk;
         chunk = new Buffer(0);
         curlen = 0;
       } else {
         if (state === 'keyFound') {
           state = 'findingHeader';
+        } else {
+          waiting = chunk;
+          chunk = new Buffer(0);
+          curlen = 0;
         }
       }
     }
+
+    stream.resume();
   });
   
   stream.on('end', function() {

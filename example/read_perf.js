@@ -1,7 +1,7 @@
 var Medea = require('../');
 var medea = new Medea({ readOnly: true });
 
-var num = 100000;
+var num = 130000;
 var iterations = 3;
 
 medea.open(function() {
