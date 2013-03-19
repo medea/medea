@@ -14,6 +14,7 @@ medea.open(function() {
     if (i === len - 1) {
       medea.put('hello' + i, 'valz' + i, function() {
         console.log('time:', (Date.now() - start) / 1000, 's');
+        console.log(medea.keydir);
         medea.close();
       });
     } else {
