@@ -362,7 +362,7 @@ Medea.prototype.get = function(key, cb) {
       var val = new Buffer(len);
       var ofs = 0;
       bufs.forEach(function(b) {
-        b.copy(val, 0, ofs, b.length);
+        b.copy(val, ofs, 0, b.length);
         ofs += b.length;
       });
 
