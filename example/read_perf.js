@@ -4,6 +4,9 @@ var medea = new Medea({ readOnly: true });
 var num = 130000;
 var iterations = 1;
  
+process.stdin.resume();
+console.log(process.pid);
+process.stdin.on('data', function() {
 medea.open(function() {
   var ids = new Array(num);
   for (var i = 0, len = ids.length; i < len; i++) {
@@ -34,4 +37,5 @@ medea.open(function() {
     }
   }
 
+});
 });
