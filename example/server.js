@@ -15,6 +15,9 @@ var server = argo()
       }
       
       medea.get(key, function(err, val) {
+        if (err) {
+          console.log(err);
+        }
         if (!val) {
           env.response.statusCode = 404;
           next(env);

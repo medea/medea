@@ -54,6 +54,7 @@ var Medea = module.exports = function(options) {
   this.dirname = options.hasOwnProperty('dirname') ? options.dirname: null;
   this.readOnly = false;
   this.bytesToBeWritten = 0;
+  this.readableFiles = [];
 };
 
 Medea.prototype.open = function(dir, options, cb) {
@@ -65,7 +66,7 @@ Medea.prototype.open = function(dir, options, cb) {
   if (typeof dir === 'function') {
     options = {};
     cb = dir;
-    dir = this.dirname || 'medea';
+    dir = this.dirname || __dirname + '/medea';
   }
 
   this.dirname = dir;
@@ -73,6 +74,19 @@ Medea.prototype.open = function(dir, options, cb) {
   var that = this;
   var scanFiles = function(cb) {
     that._getReadableFiles(function(err, arr) {
+      arr.forEach(function(f) {
+        var fd = fs.openSync(f, 'r');
+        var readable = new DataFile();
+        readable.fd = fd;
+        readable.filename = f;
+        readable.dirname = that.dirname;
+        readable.timestamp = f.split('.')[0];
+
+        var ind = readable.timestamp.replace('\\', '/').lastIndexOf('/');
+        readable.timestamp = Number(readable.timestamp.substr(ind+1));
+
+        that.readableFiles.push(readable);
+      });
       that._scanKeyFiles(arr, function() {
         if (cb) cb();
       });
@@ -86,6 +100,7 @@ Medea.prototype.open = function(dir, options, cb) {
           DataFile.create(that.dirname, function(err, file) {
             writeLock.writeActiveFile(that.dirname, file, function() {
               that.active = file;
+              that.readableFiles.push(that.active);
               if (cb) cb();
             });
           });
@@ -224,6 +239,15 @@ Medea.prototype._checkWrite = function() {
   return ret;
 };
 
+Medea.prototype._closeReadableFiles = function(cb) {
+  var that = this;
+  this.readableFiles.forEach(function(f) {
+    if (f.fd !== that.active.fd) {
+      fs.closeSync(f.fd);
+    }
+  });
+};
+
 Medea.prototype.close = function(cb) {
   var that = this;
   this.active.closeForWriting(function() {
@@ -234,6 +258,7 @@ Medea.prototype.close = function(cb) {
             fs.close(that.active.hintFd, function() {
               fs.unlink(that.writeLock.filename, function(err) {
                 fs.close(that.writeLock.fd, function() {
+                  that._closeReadableFiles();
                   if (cb) cb();
                 });
               });
@@ -244,6 +269,7 @@ Medea.prototype.close = function(cb) {
     } else {
       fs.unlink(that.writeLock.filename, function(err) {
         fs.close(that.writeLock.fd, function() {
+          that._closeReadableFiles();
           if (cb) cb();
         });
       });
@@ -338,6 +364,7 @@ Medea.prototype._wrapWriteFileSync = function() {
   this.isWrapping = true;
   var file = DataFile.createSync(this.dirname);
   this.writeLock.writeActiveFileSync(this.dirname, file);
+  this.readableFiles.push(file);
   this.active = file;
   oldFile.closeForWritingSync();
   this.bytesToBeWritten = 0;
@@ -349,35 +376,31 @@ Medea.prototype.get = function(key, cb) {
   if (entry) {
     var readBuffer = new Buffer(entry.valueSize);
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
-    var stream = fs.createReadStream(filename, { start: entry.valuePosition, end: entry.valuePosition + entry.valueSize - 1 });
-
-    var bufs = [];
-    var len = 0;
-    stream.on('data', function(chunk) {
-      bufs.push(chunk);
-      len += chunk.length;
+    var fd;
+    this.readableFiles.forEach(function(df) {
+      if (df.timestamp === entry.fileId) {
+        fd = df.fd;
+      }
     });
-    
-    stream.on('end', function() {
-      var val = new Buffer(len);
-      var ofs = 0;
-      bufs.forEach(function(b) {
-        b.copy(val, ofs, 0, b.length);
-        ofs += b.length;
-      });
 
-      if (val.toString() !== tombstone.toString()) {
-        cb(null, val);
+    if (!fd) {
+      cb(new Error('Invalid file ID.'));
+      return;
+    }
+
+    var buf = new Buffer(entry.valueSize);
+    fs.read(fd, buf, 0, entry.valueSize, entry.valuePosition, function(err, bytesRead) {
+      if (err) {
+        cb(err);
+        return;
+      }
+
+      if (buf.toString() !== tombstone.toString()) {
+        cb(null, buf);
       } else {
         if (cb) cb();
       }
-
     });
-
-    stream.on('error', function(err) {
-      cb(err);
-    });
-
   } else {
     if (cb) cb();
   }
