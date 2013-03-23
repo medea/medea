@@ -328,7 +328,7 @@ Medea.prototype.put = function(k, v, cb) {
       }
 
       var oldOffset = file.offset;
-      file.offset = file.offset + line.length;
+      file.offset += line.length;
       var offsetField = new Buffer(sizes.offset);
       var totalSizeField = new Buffer(sizes.totalsize);
 

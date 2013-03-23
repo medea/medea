@@ -84,26 +84,15 @@ DataFile.createSync = function(dirname) {
 };
 
 DataFile.prototype.write = function(bufs, cb) {
-  /*var stream = fs.createWriteStream(this.filename, { flags: 'a', fd: this.fd });
-  stream.on('error', function(err) {
-    if (cb) cb(err);
-  });
-  stream.write(bufs, cb);*/
-  fs.write(this.fd, bufs, 0, bufs.length, this.offset, cb);
+  fs.write(this.fd, bufs, 0, bufs.length, null, cb);
 };
 
 DataFile.prototype.writeHintFile = function(bufs, cb) {
-  /*var filename = this.dirname + '/' + this.timestamp + '.medea.hint';
-  var stream = fs.createWriteStream(filename, { flags: 'a', fd: this.hintFd });
-  stream.on('error', function(err) {
-    if (cb) cb(err);
-  });
-  stream.write(bufs, cb);*/
-  fs.write(this.hintFd, bufs, 0, bufs.length, this.hintOffset, cb);
+  fs.write(this.hintFd, bufs, 0, bufs.length, null, cb);
 };
 
 DataFile.prototype.writeSync = function(bufs) {
-  return fs.writeSync(this.fd, bufs, 0, bufs.length, 0);
+  return fs.writeSync(this.fd, bufs, 0, bufs.length, null);
 };
 
 
