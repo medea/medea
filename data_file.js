@@ -6,6 +6,7 @@ var sizes = constants.sizes;
 var HintFile = function() {
   this.filename = null;
   this.fd = null;
+  this.offset = 0;
 };
 
 var DataFile = module.exports = function() {
@@ -16,6 +17,7 @@ var DataFile = module.exports = function() {
   this.hintFd = null;
   this.readOnly = true;
   this.hintCrc = new Buffer(sizes.crc);
+  this.hintOffset = 0;
   this.timestamp = null;
   this.writeLock = null;
 };
@@ -47,6 +49,7 @@ DataFile.create = function(dirname, cb) {
           file.readOnly = false;
           file.fd = val1.fd;
           file.hintFd = val2.fd;
+          file.hintOffset = 0;
           file.offset = 0;
           file.timestamp = stamp;
 
@@ -74,26 +77,29 @@ DataFile.createSync = function(dirname) {
   file.fd = val1.fd;
   file.hintFd = val2.fd;
   file.offset = 0;
+  file.hintOffset = 0;
   file.timestamp = stamp;
 
   return file;
 };
 
 DataFile.prototype.write = function(bufs, cb) {
-  var stream = fs.createWriteStream(this.filename, { flags: 'a', fd: this.fd });
+  /*var stream = fs.createWriteStream(this.filename, { flags: 'a', fd: this.fd });
   stream.on('error', function(err) {
     if (cb) cb(err);
   });
-  stream.write(bufs, cb);
+  stream.write(bufs, cb);*/
+  fs.write(this.fd, bufs, 0, bufs.length, this.offset, cb);
 };
 
 DataFile.prototype.writeHintFile = function(bufs, cb) {
-  var filename = this.dirname + '/' + this.timestamp + '.medea.hint'
+  /*var filename = this.dirname + '/' + this.timestamp + '.medea.hint';
   var stream = fs.createWriteStream(filename, { flags: 'a', fd: this.hintFd });
   stream.on('error', function(err) {
     if (cb) cb(err);
   });
-  stream.write(bufs, cb);
+  stream.write(bufs, cb);*/
+  fs.write(this.hintFd, bufs, 0, bufs.length, this.hintOffset, cb);
 };
 
 DataFile.prototype.writeSync = function(bufs) {

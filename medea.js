@@ -344,6 +344,7 @@ Medea.prototype.put = function(k, v, cb) {
           return;
         }
         file.hintCrc = crc32(hintBufs, file.hintCrc);
+        file.hintOffset += hintBufs.length;
 
         var entry = new KeyDirEntry();
         entry.fileId = file.timestamp;
