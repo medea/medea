@@ -9,6 +9,7 @@ var Lock = require('./lock');
 var RedBlackTree = require('./tree');
 
 var sizes = constants.sizes;
+var headerOffsets = constants.headerOffsets;
 var writeCheck = constants.writeCheck;
 
 var tombstone = new Buffer('medea_tombstone');
@@ -289,7 +290,7 @@ Medea.prototype.put = function(k, v, cb) {
 
   var bytesToBeWritten = sizes.header + k.length + v.length;
   this.bytesToBeWritten += bytesToBeWritten;
-  
+
   var that = this;
   var next = function(cb) { cb(null, that.active); };
   var check = this._checkWrite();
@@ -304,41 +305,51 @@ Medea.prototype.put = function(k, v, cb) {
   next(function(err, file) {
     var ts = Date.now();
 
-    var crc = new Buffer(sizes.crc);
-    var timestamp = new Buffer(sizes.timestamp);
-    var keysz = new Buffer(sizes.keysize);
-    var valuesz = new Buffer(sizes.valsize);
-    var key = new Buffer(k);
-    var value = new Buffer(v);
+    /**
+     * [crc][timestamp][keysz][valuesz][key][value]
+     */
+    var lineBuffer = new Buffer(sizes.header + k.length + v.length);
+    var key = k;
+    var value = v;
 
-    timestamp.writeDoubleBE(ts, 0);
-    keysz.writeUInt16BE(key.length, 0);
-    valuesz.writeUInt32BE(value.length, 0);
+    lineBuffer.writeDoubleBE(ts, headerOffsets.timestamp);
+    lineBuffer.writeUInt16BE(key.length, headerOffsets.keysize);
+    lineBuffer.writeUInt32BE(value.length, headerOffsets.valsize);
 
-    var bufs = Buffer.concat([timestamp, keysz, valuesz, key, value]);
-    var crcBuf = crc32(bufs);
+    key.copy(lineBuffer, headerOffsets.valsize + sizes.valsize);
+    value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
 
-    crcBuf.copy(crc, 0, 0, crcBuf.length);
+    //using slice we are just referencing the originial buffer
+    var crcBuf = crc32(lineBuffer.slice(headerOffsets.timestamp,  headerOffsets.valsize+ sizes.valsize));
+    crcBuf = crc32(key, crcBuf);
+    crcBuf = crc32(value, crcBuf);
+    crcBuf.copy(lineBuffer)
 
-    var line = Buffer.concat([crc, bufs]);
-
-    file.write(line, function(err) {
+    file.write(lineBuffer, function(err) {
       if (err) {
         if (cb) cb(err);
         return;
       }
 
       var oldOffset = file.offset;
-      file.offset += line.length;
-      var offsetField = new Buffer(sizes.offset);
-      var totalSizeField = new Buffer(sizes.totalsize);
+      file.offset += lineBuffer.length;
 
       var totalSz = key.length + value.length + sizes.header;
-      offsetField.writeDoubleBE(oldOffset, 0);
-      totalSizeField.writeUInt32BE(totalSz, 0);
 
-      var hintBufs = Buffer.concat([timestamp, keysz, totalSizeField, offsetField, key]);
+      var hintBufs = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
 
+      //timestamp
+      lineBuffer.copy(hintBufs, 0, headerOffsets.timestamp, headerOffsets.timestamp + sizes.timestamp);
+      //keysize
+      lineBuffer.copy(hintBufs, sizes.timestamp, headerOffsets.keysize, headerOffsets.keysize + sizes.keysize);
+      //total size
+      hintBufs.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
+      //offset
+      hintBufs.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
+      //key
+      k.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
+
+      //console.log(hintBufs.readUInt32BE(10))
       file.writeHintFile(hintBufs, function(err) {
         if (err) {
           if (cb) cb(err);
