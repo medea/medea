@@ -3,7 +3,7 @@ var medea = new Medea({ readOnly: true });
 
 var num = 130000;
 var iterations = 1;
-
+ 
 medea.open(function() {
   var ids = new Array(num);
   for (var i = 0, len = ids.length; i < len; i++) {
@@ -12,15 +12,13 @@ medea.open(function() {
 
   var start = Date.now();
 
+  var errors = [];
   var counter = 0;
   var errors = [];
   for (var j = 0; j < iterations; j++) {
     for (var i = 0, len = ids.length; i < len; i++) {
       medea.get('hello' + ids[i], function(err, val) {
-        if (err) {
-          errors.push(err);
-          console.log(err);
-        }
+        if (err) errors.push(err);
         counter++
         if (counter === num * iterations) {
           var end = Date.now() - start;

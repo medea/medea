@@ -8,6 +8,16 @@ exports.sizes = {
   totalsize: 4
 };
 
+/**
+ * [crc][timestamp][keysz][valuesz]
+ */
+exports.headerOffsets = {
+  crc: 0,
+  timestamp: 4,
+  keysize: 12,
+  valsize: 14
+}
+
 exports.writeCheck = {
   fresh: 1,
   wrap: 2,
