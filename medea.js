@@ -67,7 +67,7 @@ Medea.prototype.open = function(dir, options, cb) {
   if (typeof dir === 'function') {
     options = {};
     cb = dir;
-    dir = this.dirname || __dirname + '/medea';
+    dir = this.dirname || process.cwd() + '/medea';
   }
 
   this.dirname = dir;
