@@ -182,11 +182,11 @@ function enhance(MedeaCluster) {
 
     this._close(cb);
   };
+
+  return MedeaCluster;
 }
 
 module.exports = function(Medea) {
   util.inherits(MedeaCluster, Medea);
-  enhance(MedeaCluster);
-  //MedeaCluster.prototype.setupMaster = setupMaster;
-  return MedeaCluster;
+  return enhance(MedeaCluster);
 };
