@@ -1,4 +1,3 @@
-var cluster = require('cluster');
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
 var constants = require('./constants');
@@ -57,50 +56,6 @@ var Medea = module.exports = function(options) {
   this.readOnly = false;
   this.bytesToBeWritten = 0;
   this.readableFiles = [];
-  this.opened = false;
-  this._workerHandlersSet = false;
-};
-
-Medea.prototype.setupMaster = function() {
-  var that = this;
-  cluster.on('fork', function(worker) {
-    that._setupWorker(worker);
-  });
-
-  Object.keys(cluster.workers).forEach(function(id) {
-    that._setupWorker(cluster.workers[id]);
-  });
-};
-
-Medea.prototype._setupWorker = function(worker) {
-  var that = this;
-  worker.on('message', function(data) {
-    if (data.cmd === 'open') {
-      that.open(data.dirname, data.options, function(err) {
-        var msg = { cmd: 'opened', err: err };
-        worker.send(msg);
-      });
-    } else if (data.cmd === 'get') {
-      that.get(data.key, function(err, val) {
-        var msg = { cmd: 'gotten' };
-        if (err) {
-          msg.err = err;
-        }
-
-        if (val) {
-          msg.value = val.toString('base64');
-        }
-
-        worker.send(msg);
-      });
-    } else if (data.cmd === 'put') {
-      that.put(data.key, data.value, function(err) {
-        var msg = { cmd: 'putted', err: err };
-        worker.send(msg);
-      });
-    } else if (data.cmd === 'remove') {
-    }
-  });
 };
 
 Medea.prototype.open = function(dir, options, cb) {
@@ -116,23 +71,6 @@ Medea.prototype.open = function(dir, options, cb) {
   }
 
   this.dirname = dir;
-
-  if (cluster.isWorker) {
-    process.once('message', function(data) {
-      if (data.cmd === 'opened') {
-        cb(data.err);
-      }
-    });
-    process.send({ cmd: 'open', dirname: dir, options: options });
-    return;
-  }
-
-  if (this.opened) {
-    cb();
-    return;
-  }
-
-  this.opened = true;
 
   var that = this;
   var scanFiles = function(cb) {
@@ -341,16 +279,6 @@ Medea.prototype.close = function(cb) {
 };
 
 Medea.prototype.put = function(k, v, cb) {
-  if (cluster.isWorker) {
-    process.once('message', function(data) {
-      if (data.cmd === 'putted') {
-        cb(data.err);
-      }
-    });
-    process.send({ cmd: 'put', key: k, value: v });
-    return;
-  }
-
   if (!(k instanceof Buffer)) {
     k = new Buffer(k.toString());
   }
@@ -456,20 +384,6 @@ Medea.prototype._wrapWriteFileSync = function() {
 };
 
 Medea.prototype.get = function(key, cb) {
-  if (cluster.isWorker) {
-    process.once('message', function(data) {
-      if (data.cmd === 'gotten') {
-        var val;
-        if (data.value) {
-          val = new Buffer(data.value, 'base64');
-        }
-        cb(data.err, val);
-      }
-    });
-    process.send({ cmd: 'get', key: key });
-    return;
-  }
-
   var entry = this.keydir[key];
   if (entry) {
     var readBuffer = new Buffer(entry.valueSize);
@@ -519,8 +433,8 @@ Medea.prototype.remove = function(key, cb) {
   });
 };
 
-Medea.prototype.listKeys = function() {
-  return Object.keys(this.keydir);
+Medea.prototype.listKeys = function(cb) {
+  if (cb) cb(null, Object.keys(this.keydir));
 };
 
 var MappedItem = function() {
@@ -595,5 +509,13 @@ Medea.prototype.mapReduce = function(options, cb) {
 };
 
 Medea.prototype.sync = function(cb) {
-  fs.fsync(this.active.fd, cb);
+  var that = this;
+  fs.fsync(that.active.fd, function(err) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    fs.fsync(that.active.hintFd, cb);
+  });
 };

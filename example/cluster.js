@@ -2,8 +2,11 @@ var cluster = require('cluster');
 var argo = require('argo-server');
 var numCPUs = require('os').cpus().length;
 var Medea = require('../');
+var clusterify = require('../medea-cluster');
 
-var medea = new Medea();
+var MedeaCluster = clusterify(Medea);
+
+var medea = new MedeaCluster();
 
 if (cluster.isMaster) {
   // Run medea.setupMaster() in the master process.
