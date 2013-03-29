@@ -4,7 +4,7 @@ A lightweight key-value storage library.
 
 * Can be embedded in Node.js applications.
 * Support for basic get, put, and remove operations.
-* Heavily inspired by Basho's [Bitcask](https://github.com/basho/bitcask) key-value database.
+* Heavily inspired by Basho's [Bitcask](https://github.com/basho/bitcask) key-value store.
 * Values can be any string or `Buffer`.
 
 ## Example
@@ -34,7 +34,7 @@ $ npm install medea
 
 ### medea.open([directory], callback)
 
-Opens a Medea database.
+Opens a Medea key-value store.
 
 `directory`: Optional. Defaults to `medea` in the current directory.
 
@@ -50,7 +50,7 @@ Returns the value associated with the given key.
 
 ### medea.put(key, value, callback) 
 
-Stores a value in the database.
+Stores a value in Medea.
 
 `key`: identifier
 
@@ -60,7 +60,7 @@ Stores a value in the database.
 
 ### medea.remove(key, callback)
 
-Removes an entry from the database.
+Removes an entry from Medea.
 
 `key`: identifier for the item to remove
 
@@ -68,21 +68,23 @@ Removes an entry from the database.
 
 ### medea.sync(callback)
 
-Performs an fsync operation on the data file.
+Performs an fsync operation on the active data and hint files.
 
 ### medea.close(callback)
 
-Closes the database.
+Closes Medea.
 
-### medea.listKeys()
+### medea.listKeys(callback)
 
-Returns an array of all the keys in the database.
+Returns an array of keys from the key-value store.
+
+`callback`: A function that takes two parameters: an error and the array of keys.
 
 ### medea.mapReduce(options, callback)
 
 Experimental.
 
-Ad-hoc map-reduce queries over the database.  The query results are not indexed.  A more robust map-reduce implementation will be provided in the near future.
+Ad-hoc map-reduce queries over the key-value pairs.  The query results are not indexed.  A more robust map-reduce implementation will be provided in the near future.
 
 See `examples/map_reduce.js` for an example.
 

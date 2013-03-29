@@ -433,8 +433,8 @@ Medea.prototype.remove = function(key, cb) {
   });
 };
 
-Medea.prototype.listKeys = function() {
-  return Object.keys(this.keydir);
+Medea.prototype.listKeys = function(cb) {
+  if (cb) cb(null, Object.keys(this.keydir));
 };
 
 var MappedItem = function() {
@@ -509,5 +509,13 @@ Medea.prototype.mapReduce = function(options, cb) {
 };
 
 Medea.prototype.sync = function(cb) {
-  fs.fsync(this.active.fd, cb);
+  var that = this;
+  fs.fsync(that.active.fd, function(err) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    fs.fsync(that.active.hintFd, cb);
+  });
 };
