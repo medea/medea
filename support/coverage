@@ -1,0 +1,8 @@
+#!/bin/sh
+
+rm -rf ../medea-jscoverage/
+jscoverage --exclude=example --exclude=node_modules ./ ../medea-jscoverage
+cd ../medea-jscoverage/
+npm install
+mocha --reporter html-cov > coverage.html
+open coverage.html
