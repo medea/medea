@@ -118,7 +118,7 @@ Contains a process ID and the active file path.
 
 ## Limitations
 
-Currently, multiple processes cannot access the same data directory.  Run one process per directory.
+Currently, multiple processes cannot access the same data directory.  Run one process per directory.  A workaround has been developed for servers using Node's `cluster` module.  Check out [medea-clusterify](https://github.com/argo/medea-clusterify) to see how it works!
 
 Repeated use leads to fragmentation and empty files. A merge process needs to be run for cleanup, but that piece has yet to be developed.
 
