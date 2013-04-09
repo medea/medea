@@ -81,10 +81,10 @@ Medea.prototype.open = function(dir, options, cb) {
         readable.fd = fd;
         readable.filename = f;
         readable.dirname = that.dirname;
-        readable.timestamp = f.split('.')[0];
 
-        var ind = readable.timestamp.replace('\\', '/').lastIndexOf('/');
-        readable.timestamp = Number(readable.timestamp.substr(ind+1));
+        var filename = f.replace('\\', '/').split('/');
+        readable.timestamp = filename[filename.length - 1].split('.')[0];
+        readable.timestamp = Number(readable.timestamp);
 
         that.readableFiles.push(readable);
       });
