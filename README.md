@@ -7,6 +7,27 @@ A persistent key-value storage library.
 * Influenced by Basho's [Bitcask](https://github.com/basho/bitcask) key-value store.
 * Values can be any string or `Buffer`.
 
+## Contents
+
+- [Example](#example)
+- [Install](#install)
+- [Usage](#usage)
+  - [medea.open([directory], callback)](#medeaopendirectory-callback)
+  - [medea.get(key, callback)](#medeagetkey-callback)
+  - [medea.put(key, value, callback)](#medeaputkey-value-callback)
+  - [medea.remove(key, callback)](#medearemovekey-callback)
+  - [medea.sync(callback)](#medeasynccallback)
+  - [medea.close(callback)](#medeaclosecallback)
+  - [medea.listKeys(callback)](#medealistkeyscallback)
+  - [medea.mapReduce(options, callback)](#medeamapreduceoptions-callback)
+- [How It Works](#how-it-works)
+  - [Keydir](#keydir)
+  - [Data Files](#data-files)
+  - [Hint Files](#hint-files)
+  - [Lock Files](#lock-files)
+- [Limitations](#limitations)
+- [License](#license)
+
 ## Example
 
 ```javascript
