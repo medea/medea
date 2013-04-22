@@ -519,3 +519,135 @@ Medea.prototype.sync = function(cb) {
     fs.fsync(that.active.hintFd, cb);
   });
 };
+
+Medea.prototype.compact = function(cb) {
+  /*
+   * 1. Get readable files.
+   * 2. Match data file entries with keydir entries.
+   * 3. If older than keydir version or if tombstoned, delete.
+   * 4. Write new key to file system, update keydir.
+   * 5. Delete old files.
+   */
+
+  var unlink = function(files, index, cb) {
+    fs.unlink(files[index], function(err) {
+      if (index === files.length - 1) {
+        cb();
+        return;
+      }
+
+      unlink(files, index++, cb);
+    });
+  };
+
+  var files = readableFiles.slice(0).sort(function(a, b) {
+    if (a.timestamp < b.timestamp) {
+      return - 1;
+    } else if (a.timestamp > b.timestamp) {
+      return 1;
+    }
+
+    return 0;
+  });
+
+  files.pop(); // remove current file.
+
+  var output = DataFile.createSync(this.dirname);
+
+  this._compactFile(files, output, 0, function(err) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    unlink(files, 0, function(err) {
+      cb();
+    });
+  });
+};
+
+Medea.prototype._compactFile = function(files, output, index, cb) {
+  var self = this;
+  var file = files[index];
+  var parser = new DataFileParser(file);
+  this.delKeyDir = [];
+
+  parser.on('error', function(err) {
+    cb(err);
+  });
+
+  parser.on('entry', function(err, entry) {
+    var outOfDate = self._outOfDate([self.keydir, self.delKeyDir], false, entry);
+    if (outOfDate) {
+      delete self.keydir[entry.key];
+      return;
+    }
+
+   if (entry.value.toString() === tombstone.toString()) {
+     var newEntry = new KeyDirEntry();
+     newEntry.valuePosition = entry.valuePosition;
+     newEntry.valueSize = entry.valueSize;
+     newEntry.fileId = entry.fileId;
+     newEntry.timestamp = entry.timestamp;
+
+     self.delKeyDir[entry.key] = newEntry;
+
+     delete self.keydir[entry.key];
+     self._innerMergeWrite(entry, output);
+   } else {
+     if (self.delKeyDir[entry.key]) {
+       delete self.delKeyDir[entry.key];
+     }
+
+     self._innerMergeWrite(entry, output);
+   } 
+  });
+
+  parser.on('end', function() {
+    if (files.length === index + 1) {
+      cb(null);
+    } else {
+      self._compactFile(files, index++, cb);
+    }
+  });
+};
+
+Medea.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
+  var self = this;
+
+  if (!keydirs.length) {
+   return (!everFound);
+  }
+
+  var keydir = keydirs[0];
+  var keyDirEntry = keydir[fileEntry.key];
+
+  if (!keyDirEntry) {
+    keydirs.shift();
+    return self._outOfDate(keydirs, everFound, fileEntry);
+  }
+
+  if (keyDirEntry.timestamp === fileEntry.timestamp) {
+    if (keyDirEntry.fileId > fileEntry.fileId) {
+      return true;
+    } else if (keydirEntry.fileId === fileEntry.fileId) {
+      if (keyDirEntry.offset > fileEntry.offset) {
+        return true;
+      } else {
+        keydirs.shift();
+        return self._outOfDate(keydirs, true, fileEntry);
+      }
+    } else {
+      keydirs.shift();
+      return self._outOfDate(keydirs, true, fileEntry);
+    }
+  } else if (keyDirEntry.timestamp < fileEntry.timestamp) {
+    keydirs.shift();
+    return self._outOfDate(keydirs, true, fileEntry);
+  }
+
+  return true;
+};
+
+Medea.prototype._innerMergeWrite = function(entry, outfile) {
+};
