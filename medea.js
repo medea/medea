@@ -3,6 +3,7 @@ var crc32 = require('buffer-crc32');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataFile = require('./data_file');
+var DataFileParser = require('./data_file_parser');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
@@ -279,6 +280,8 @@ Medea.prototype.close = function(cb) {
 };
 
 Medea.prototype.put = function(k, v, cb) {
+  var file = this.active;
+
   if (!(k instanceof Buffer)) {
     k = new Buffer(k.toString());
   }
@@ -291,11 +294,11 @@ Medea.prototype.put = function(k, v, cb) {
   this.bytesToBeWritten += bytesToBeWritten;
 
   var that = this;
-  var next = function(cb) { cb(null, that.active); };
+  var next = function(cb) { cb(null, file); };
   var check = this._checkWrite();
   if (check === writeCheck.wrap) {
     next = function(cb) {
-      var file = that._wrapWriteFileSync();
+      var file = that._wrapWriteFileSync(file);
       cb(null, file);
     };
   }
@@ -371,15 +374,29 @@ Medea.prototype.put = function(k, v, cb) {
   });
 };
 
-Medea.prototype._wrapWriteFileSync = function() {
-  var oldFile = this.active;
-  this.isWrapping = true;
+Medea.prototype._wrapWriteFileSync = function(oldFile) {
+  if (!oldFile) {
+    oldFile = this.active;
+  }
+
+  if (oldFile.fd !== this.active.fd) {
+    isActive = false;
+  }
+
   var file = DataFile.createSync(this.dirname);
-  this.writeLock.writeActiveFileSync(this.dirname, file);
-  this.readableFiles.push(file);
-  this.active = file;
-  oldFile.closeForWritingSync();
-  this.bytesToBeWritten = 0;
+
+  if (isActive) {
+    this.isWrapping = true;
+    this.writeLock.writeActiveFileSync(this.dirname, file);
+    this.readableFiles.push(file);
+    this.active = file;
+    oldFile.closeForWritingSync();
+    this.bytesToBeWritten = 0;
+  } else {
+    this.activeMerge = file;
+    oldFile.closeForWritingSync();
+  }
+
   return file;
 };
 
@@ -508,14 +525,257 @@ Medea.prototype.mapReduce = function(options, cb) {
   iterator(keys, 0, len, cb);
 };
 
-Medea.prototype.sync = function(cb) {
+Medea.prototype.sync = function(file, cb) {
+  if (!cb && typeof file === 'function') {
+    cb = file;
+    file = this.active;
+  }
+
   var that = this;
-  fs.fsync(that.active.fd, function(err) {
+  fs.fsync(file.fd, function(err) {
     if (err) {
       cb(err);
       return;
     }
 
-    fs.fsync(that.active.hintFd, cb);
+    fs.fsync(file.hintFd, cb);
   });
+};
+
+Medea.prototype.compact = function(cb) {
+  /*
+   * 1. Get readable files.
+   * 2. Match data file entries with keydir entries.
+   * 3. If older than keydir version or if tombstoned, delete.
+   * 4. Write new key to file system, update keydir.
+   * 5. Delete old files.
+   */
+
+  var unlink = function(filenames, index, cb) {
+    fs.unlink(filenames[index], function(err) {
+      if (index === filenames.length - 1) {
+        cb();
+        return;
+      }
+
+      unlink(filenames, ++index, cb);
+    });
+  };
+
+  var files = this.readableFiles.slice(0).sort(function(a, b) {
+    if (a.timestamp < b.timestamp) {
+      return 1;
+    } else if (a.timestamp > b.timestamp) {
+      return - 1;
+    }
+
+    return 0;
+  });
+
+  files.shift(); // remove current file.
+
+  this.activeMerge = DataFile.createSync(this.dirname);
+
+  var self = this;
+  this._compactFile(files, 0, function(err) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    var dataFileNames = files.map(function(f) {
+      return f.filename;
+    });
+
+    var hintFileNames = files.map(function(f) {
+      return f.filename.replace('.data', '.hint');
+    });
+
+    self.sync(self.activeMerge, function(err) {
+      if (err) {
+        cb(err);
+        return;
+      }
+
+      unlink(dataFileNames.concat(hintFileNames), 0, function(err) {
+        if (err) {
+          cb(err);
+          return;
+        }
+
+        cb();
+      });
+    });
+  });
+};
+
+Medea.prototype._compactFile = function(files, index, cb) {
+  var self = this;
+  var file = files[index];
+  var parser = new DataFileParser(file);
+  this.delKeyDir = [];
+
+  parser.on('error', function(err) {
+    cb(err);
+  });
+
+  parser.on('entry', function(entry) {
+    var outOfDate = self._outOfDate([self.keydir, self.delKeyDir], false, entry);
+    if (outOfDate) {
+      delete self.keydir[entry.key];
+      return;
+    }
+
+   if (entry.value.toString() === tombstone.toString()) {
+     var newEntry = new KeyDirEntry();
+     newEntry.valuePosition = entry.valuePosition;
+     newEntry.valueSize = entry.valueSize;
+     newEntry.fileId = entry.fileId;
+     newEntry.timestamp = entry.timestamp;
+
+     self.delKeyDir[entry.key] = newEntry;
+
+     delete self.keydir[entry.key];
+     self._innerMergeWrite(entry);
+   } else {
+     if (self.delKeyDir[entry.key]) {
+       delete self.delKeyDir[entry.key];
+     }
+
+     self._innerMergeWrite(entry);
+   } 
+  });
+
+  parser.on('end', function() {
+    if (files.length === index + 1) {
+      cb(null);
+    } else {
+      self._compactFile(files, ++index, cb);
+    }
+  });
+
+  parser.parse(cb);
+};
+
+Medea.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
+  var self = this;
+
+  if (!keydirs.length) {
+   return (!everFound);
+  }
+
+  var keydir = keydirs[0];
+  var keyDirEntry = keydir[fileEntry.key];
+
+  if (!keyDirEntry) {
+    keydirs.shift();
+    return self._outOfDate(keydirs, everFound, fileEntry);
+  }
+
+  if (keyDirEntry.timestamp === fileEntry.timestamp) {
+    if (keyDirEntry.fileId > fileEntry.fileId) {
+      return true;
+    } else if (keyDirEntry.fileId === fileEntry.fileId) {
+      if (keyDirEntry.offset > fileEntry.offset) {
+        return true;
+      } else {
+        keydirs.shift();
+        return self._outOfDate(keydirs, true, fileEntry);
+      }
+    } else {
+      keydirs.shift();
+      return self._outOfDate(keydirs, true, fileEntry);
+    }
+  } else if (keyDirEntry.timestamp < fileEntry.timestamp) {
+    keydirs.shift();
+    return self._outOfDate(keydirs, true, fileEntry);
+  }
+
+  return true;
+};
+
+Medea.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
+  var file = this.activeMerge;
+  var buf = dataEntry.buffer;
+  var bytesToBeWritten = buf.length;
+
+  var that = this;
+
+  var next = function(cb) { cb(null, file); };
+  var check = this._checkWrite();
+  if (check === writeCheck.wrap) {
+    next = function(cb) {
+      var file = that._wrapWriteFileSync(file);
+      cb(null, file);
+    };
+  }
+
+  var that = this;
+  next(function(err, file) {
+    /**
+     * [crc][timestamp][keysz][valuesz][key][value]
+     */
+    var key = dataEntry.key;
+    var value = dataEntry.value;
+    var lineBuffer = new Buffer(sizes.header + key.length + value.length);
+
+    lineBuffer.writeDoubleBE(dataEntry.timestamp, headerOffsets.timestamp);
+    lineBuffer.writeUInt16BE(key.length, headerOffsets.keysize);
+    lineBuffer.writeUInt32BE(value.length, headerOffsets.valsize);
+
+    key.copy(lineBuffer, headerOffsets.valsize + sizes.valsize);
+    value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
+
+    //using slice we are just referencing the originial buffer
+    var crcBuf = crc32(lineBuffer.slice(headerOffsets.timestamp,  headerOffsets.valsize+ sizes.valsize));
+    crcBuf = crc32(key, crcBuf);
+    crcBuf = crc32(value, crcBuf);
+    crcBuf.copy(lineBuffer)
+
+    file.write(lineBuffer, function(err) {
+      if (err) {
+        if (cb) cb(err);
+        return;
+      }
+
+      var oldOffset = file.offset;
+      file.offset += lineBuffer.length;
+
+      var totalSz = key.length + value.length + sizes.header;
+
+      var hintBufs = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
+
+      //timestamp
+      lineBuffer.copy(hintBufs, 0, headerOffsets.timestamp, headerOffsets.timestamp + sizes.timestamp);
+      //keysize
+      lineBuffer.copy(hintBufs, sizes.timestamp, headerOffsets.keysize, headerOffsets.keysize + sizes.keysize);
+      //total size
+      hintBufs.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
+      //offset
+      hintBufs.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
+      //key
+      key.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
+
+      //console.log(hintBufs.readUInt32BE(10))
+      file.writeHintFile(hintBufs, function(err) {
+        if (err) {
+          if (cb) cb(err);
+          return;
+        }
+        file.hintCrc = crc32(hintBufs, file.hintCrc);
+        file.hintOffset += hintBufs.length;
+
+        var entry = new KeyDirEntry();
+        entry.fileId = file.timestamp;
+        entry.valueSize = value.length;
+        entry.valuePosition = oldOffset + sizes.header + key.length;
+        entry.timestamp = dataEntry.timesamp;
+
+        that.keydir[key] = entry;
+
+        if (cb) cb();
+      });
+    });
+  });
+  
 };

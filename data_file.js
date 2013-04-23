@@ -102,13 +102,20 @@ DataFile.prototype.closeForWriting = function(cb) {
     return;
   }
 
-  if (this.hintFd) {
-    this._closeHintFile(function() {
+  var self = this;
+  fs.fsync(this.fd, function(err) {
+    if (err) {
+      cb(err);
+      return;
+    }
+    if (self.hintFd) {
+      self._closeHintFile(function() {
+        if (cb) cb();
+      });
+    } else {
       if (cb) cb();
-    });
-  } else {
-    if (cb) cb();
-  }
+    }
+  });
 };
 
 DataFile.prototype.closeForWritingSync = function() {
