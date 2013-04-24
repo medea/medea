@@ -593,17 +593,17 @@ Medea.prototype.compact = function(cb) {
 
     self.sync(self.activeMerge, function(err) {
       if (err) {
-        cb(err);
+        if (cb) cb(err);
         return;
       }
 
       unlink(dataFileNames.concat(hintFileNames), 0, function(err) {
         if (err) {
-          cb(err);
+          if (cb) cb(err);
           return;
         }
 
-        cb();
+        if (cb) cb();
       });
     });
   });
@@ -717,20 +717,7 @@ Medea.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
      */
     var key = dataEntry.key;
     var value = dataEntry.value;
-    var lineBuffer = new Buffer(sizes.header + key.length + value.length);
-
-    lineBuffer.writeDoubleBE(dataEntry.timestamp, headerOffsets.timestamp);
-    lineBuffer.writeUInt16BE(key.length, headerOffsets.keysize);
-    lineBuffer.writeUInt32BE(value.length, headerOffsets.valsize);
-
-    key.copy(lineBuffer, headerOffsets.valsize + sizes.valsize);
-    value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
-
-    //using slice we are just referencing the originial buffer
-    var crcBuf = crc32(lineBuffer.slice(headerOffsets.timestamp,  headerOffsets.valsize+ sizes.valsize));
-    crcBuf = crc32(key, crcBuf);
-    crcBuf = crc32(value, crcBuf);
-    crcBuf.copy(lineBuffer)
+    var lineBuffer = dataEntry.buffer;
 
     file.write(lineBuffer, function(err) {
       if (err) {
@@ -771,11 +758,17 @@ Medea.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
         entry.valuePosition = oldOffset + sizes.header + key.length;
         entry.timestamp = dataEntry.timesamp;
 
-        that.keydir[key] = entry;
 
-        if (cb) cb();
+        fs.fsync(file.fd, function(err) {
+          if (err) {
+            if (cb) return cb(err);
+          }
+
+          that.keydir[key] = entry;
+
+          if (cb) cb();
+        });
       });
     });
   });
-  
 };

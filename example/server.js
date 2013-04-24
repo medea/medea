@@ -33,6 +33,12 @@ var server = argo()
     handle('request', function(env, next) {
       var key = env.request.url.substr('/medea/'.length);
 
+      if (key === 'compact') {
+        medea.compact();
+        env.response.statusCode = 202;
+        next(env);
+      }
+
       if (!key.length) {
         env.response.statusCode = 404;
         next(env);
