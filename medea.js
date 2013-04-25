@@ -624,14 +624,14 @@ Medea.prototype._compactFile = function(files, index, cb) {
   var self = this;
   var file = files[index];
   var parser = new DataFileParser(file);
-  this.delKeyDir = [];
+  //this.delKeyDir = [];
 
   parser.on('error', function(err) {
     cb(err);
   });
 
   parser.on('entry', function(entry) {
-    var outOfDate = self._outOfDate([self.keydir, self.delKeyDir], false, entry);
+    var outOfDate = self._outOfDate([self.keydir/*, self.delKeyDir*/], false, entry);
     if (outOfDate) {
       self.keydir.remove(entry.key);
       return;
@@ -649,9 +649,9 @@ Medea.prototype._compactFile = function(files, index, cb) {
      delete self.keydir[entry.key];
      self._innerMergeWrite(entry);
    } else {
-     if (self.delKeyDir[entry.key]) {
+     /*if (self.delKeyDir[entry.key]) {
        //delete self.delKeyDir[entry.key];
-     }
+     }*/
 
      self._innerMergeWrite(entry);
    } 

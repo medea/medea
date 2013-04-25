@@ -135,7 +135,7 @@ RedBlackTree.prototype.remove = function(key) {
     n = pred;
   }
 
-  var child = !n.right.key ? n.left : n.right;
+  var child = (!n.right || !n.right.key) ? n.left : n.right;
 
   if (n.color === color.black) {
     n.color = child.color;
