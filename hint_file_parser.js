@@ -94,14 +94,15 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
         var key = keyBuf.toString();
 
         var fileId = Number(current.replace(dirname + '/', '').replace('.medea.hint', ''));
-        if (!keydir[key] || (keydir[key] && keydir[key].fileId === fileId)) {
+        var en = keydir.find(key);
+        if ((!en || !en.value) || (en && en.value.fileId === fileId)) {
           var entry = new KeyDirEntry();
           entry.key = key;
           entry.fileId = fileId;
           entry.timestamp = lastHeaderBuf.readDoubleBE(0);
           entry.valueSize = lastHeaderBuf.readUInt32BE(sizes.timestamp + sizes.keysize) - key.length - sizes.header;
           entry.valuePosition = lastHeaderBuf.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize) + sizes.header + key.length;
-          keydir[key] = entry;
+          keydir.insert(key, entry);
         }
 
         chunk = chunk.slice(lastKeyLen);

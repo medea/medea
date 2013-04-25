@@ -75,7 +75,7 @@ medea.open(function() {
   var port = process.env.PORT || 3000;
   server.listen(port);
   console.log('Listening on http://localhost:' + port);
-  console.log('keydir length:', Object.keys(medea.keydir).length);
+  console.log('keydir length:', medea.keydir.length);
 });
 
 ['SIGTERM','SIGINT'].forEach(function(ev) {

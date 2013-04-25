@@ -7,6 +7,7 @@ var DataFileParser = require('./data_file_parser');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
+var RedBlackTree = require('./tree');
 
 var sizes = constants.sizes;
 var headerOffsets = constants.headerOffsets;
@@ -25,7 +26,7 @@ var FileStatus = function() {
 
 var Medea = module.exports = function(options) {
   this.active = null;
-  this.keydir = {};
+  this.keydir = new RedBlackTree();
 
   options = options || {};
 
@@ -366,7 +367,8 @@ Medea.prototype.put = function(k, v, cb) {
         entry.valuePosition = oldOffset + sizes.header + key.length;
         entry.timestamp = ts;
 
-        that.keydir[k] = entry;
+        that.keydir.insert(k, entry);
+        //that.keydir[k] = entry;
 
         if (cb) cb();
       });
@@ -401,8 +403,14 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
 };
 
 Medea.prototype.get = function(key, cb) {
-  var entry = this.keydir[key];
+  var entry = this.keydir.find(key, function(a, b) {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
+
   if (entry) {
+    entry = entry.value;
     var readBuffer = new Buffer(entry.valueSize);
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
     var fd;
@@ -413,6 +421,7 @@ Medea.prototype.get = function(key, cb) {
     });
 
     if (!fd) {
+      console.log(fd);
       cb(new Error('Invalid file ID.'));
       return;
     }
@@ -438,8 +447,10 @@ Medea.prototype.get = function(key, cb) {
 Medea.prototype.remove = function(key, cb) {
   var that = this;
   this.put(key, tombstone, function(err) {
-    if (that.keydir[key]) {
-      delete that.keydir[key];
+    var entry = that.keydir.find(key);
+    if (entry && entry.value) {
+      that.keydir.remove(key);
+      //delete that.keydir[key];
     }
 
     if (err) {
@@ -622,7 +633,7 @@ Medea.prototype._compactFile = function(files, index, cb) {
   parser.on('entry', function(entry) {
     var outOfDate = self._outOfDate([self.keydir, self.delKeyDir], false, entry);
     if (outOfDate) {
-      delete self.keydir[entry.key];
+      self.keydir.remove(entry.key);
       return;
     }
 
@@ -633,13 +644,13 @@ Medea.prototype._compactFile = function(files, index, cb) {
      newEntry.fileId = entry.fileId;
      newEntry.timestamp = entry.timestamp;
 
-     self.delKeyDir[entry.key] = newEntry;
+     //self.delKeyDir[entry.key] = newEntry;
 
      delete self.keydir[entry.key];
      self._innerMergeWrite(entry);
    } else {
      if (self.delKeyDir[entry.key]) {
-       delete self.delKeyDir[entry.key];
+       //delete self.delKeyDir[entry.key];
      }
 
      self._innerMergeWrite(entry);
@@ -665,9 +676,9 @@ Medea.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
   }
 
   var keydir = keydirs[0];
-  var keyDirEntry = keydir[fileEntry.key];
+  var keyDirEntry = keydir.find(fileEntry.key);
 
-  if (!keyDirEntry) {
+  if (!keyDirEntry || !keyDirEntry.value) {
     keydirs.shift();
     return self._outOfDate(keydirs, everFound, fileEntry);
   }
@@ -764,7 +775,7 @@ Medea.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
             if (cb) return cb(err);
           }
 
-          that.keydir[key] = entry;
+          that.keydir.insert(key, entry);
 
           if (cb) cb();
         });
