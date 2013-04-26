@@ -139,18 +139,24 @@ RedBlackTree.prototype.remove = function(key) {
 
   if (n.color === color.black) {
     n.color = child.color;
+    this._delete(child);
   }
+
   this.replaceNode(n, child);
-  if (!n.parent && child) {
-    child.color = color.black;
+
+  if (n.color === color.red) {
+    this.root.color = color.black;
   }
+  /*if (!n.parent && child) {
+    child.color = color.black;
+  }*/
 };
 
 RedBlackTree.prototype._delete = function(n) {
   if (!n.parent) {
     return;
   } else {
-    if (n.sibling.color === color.red) {
+    if (n.sibling && n.sibling.color === color.red) {
       n.parent.color = red;
       n.sibling.color = black;
       if (n.isLeft()) {
@@ -160,26 +166,26 @@ RedBlackTree.prototype._delete = function(n) {
       }
     }
 
-    if (n.parent.color === color.black &&
-        n.sibling.color === color.black &&
-        n.sibling.left.color === color.black &&
-        n.sibling.right.color === color.black) {
-          n.sibling.color = red;
+    if (n.parent.color === color.black && (!n.sibling ||
+        n.sibling.color === color.black) &&
+        (!n.sibling.left || n.sibling.left.color === color.black) &&
+        (!n.sibling.right || n.sibling.right.color === color.black)) {
+          n.sibling.color = color.red;
           this._delete(n.parent);
     } else {
       if (n.parent.color === color.red &&
           n.sibling.color === color.black &&
           n.sibling.left.color === color.black &&
           n.sibling.right.color === color.black) {
-            n.sibling.color = red;
-            n.parent.color = black;
+            n.sibling.color = color.red;
+            n.parent.color = color.black;
       } else {
         if (n.isLeft() &&
             n.sibling.color === color.black &&
             n.sibling.left.color === color.red &&
             n.sibling.right.color === color.black) {
-              n.sibling.color = red;
-              n.sibling.left.color = black;
+              n.sibling.color = color.red;
+              n.sibling.left.color = color.black;
               this.rotateRight(n.sibling);
         } else if (n.isRight() &&
             n.sibling.color === color.black &&
@@ -191,12 +197,12 @@ RedBlackTree.prototype._delete = function(n) {
         }
 
         n.sibling.color = n.parent.color;
-        n.parent.color = black;
+        n.parent.color = color.black;
         if (n.isLeft()) {
-          n.sibling.right.color = black;
+          n.sibling.right.color = color.black;
           this.rotateLeft(n.parent);
         } else {
-          n.sibling.left.color = black;
+          n.sibling.left.color = color.black;
           this.rotateRight(n.parent);
         }
       }

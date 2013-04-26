@@ -624,7 +624,7 @@ Medea.prototype._compactFile = function(files, index, cb) {
   var self = this;
   var file = files[index];
   var parser = new DataFileParser(file);
-  //this.delKeyDir = [];
+  this.delKeyDir = new RedBlackTree();
 
   parser.on('error', function(err) {
     cb(err);
@@ -644,9 +644,12 @@ Medea.prototype._compactFile = function(files, index, cb) {
      newEntry.fileId = entry.fileId;
      newEntry.timestamp = entry.timestamp;
 
-     //self.delKeyDir[entry.key] = newEntry;
+     self.delKeyDir.insert(entry.key,  newEntry);
 
-     delete self.keydir[entry.key];
+     //delete self.keydir[entry.key];
+     self.keydir.remove(key);
+
+
      self._innerMergeWrite(entry);
    } else {
      /*if (self.delKeyDir[entry.key]) {
@@ -676,12 +679,23 @@ Medea.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
   }
 
   var keydir = keydirs[0];
-  var keyDirEntry = keydir.find(fileEntry.key);
+  //console.log(keydir);
+  //console.log(fileEntry.key.toString());
+  //if (!keydir.root) process.exit();
+  var keyDirEntry = keydir.find(fileEntry.key, function(a, b) {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
+
+  //console.log(keyDirEntry.value);
 
   if (!keyDirEntry || !keyDirEntry.value) {
     keydirs.shift();
     return self._outOfDate(keydirs, everFound, fileEntry);
   }
+
+  keyDirEntry = keyDirEntry.value;
 
   if (keyDirEntry.timestamp === fileEntry.timestamp) {
     if (keyDirEntry.fileId > fileEntry.fileId) {
@@ -706,6 +720,7 @@ Medea.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
 };
 
 Medea.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
+  //console.log(dataEntry);
   var file = this.activeMerge;
   var buf = dataEntry.buffer;
   var bytesToBeWritten = buf.length;
@@ -735,6 +750,7 @@ Medea.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
         if (cb) cb(err);
         return;
       }
+      //console.log(lineBuffer);
 
       var oldOffset = file.offset;
       file.offset += lineBuffer.length;
