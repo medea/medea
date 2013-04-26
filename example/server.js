@@ -1,4 +1,4 @@
-var argo = require('argo-server');
+var argo = require('argo');
 var Medea = require('../');
 
 var medea = new Medea();
