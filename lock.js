@@ -1,5 +1,5 @@
 var fs = require('fs');
-var fsflags = require('./constants').fsflags;
+var constants = require('constants');
 
 var Lock = module.exports = function() {
   this.fd = null;
@@ -12,9 +12,9 @@ Lock.prototype.isWriteFile = function() {
 };
 
 Lock.acquire = function(filename, isWriteLock, cb) {
-  var writeLockFlags = fsflags.O_CREAT | fsflags.O_EXCL | fsflags.O_RDWR | fsflags.O_SYNC;
+  var writeLockFlags = constants.O_CREAT | constants.O_EXCL | constants.O_RDWR | constants.O_SYNC;
 
-  var flags = isWriteLock ? writeLockFlags : fsflags.O_RDONLY;
+  var flags = isWriteLock ? writeLockFlags : constants.O_RDONLY;
 
   fs.open(filename, flags, 0600, function(err, fd) {
     if (err) {
