@@ -350,7 +350,6 @@ Medea.prototype.put = function(k, v, cb) {
       //key
       k.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
 
-      //console.log(hintBufs.readUInt32BE(10))
       file.writeHintFile(hintBufs, function(err) {
         if (err) {
           if (cb) cb(err);
