@@ -303,7 +303,6 @@ Medea.prototype.put = function(k, v, cb) {
     };
   }
 
-  var that = this;
   next(function(err, file) {
     var ts = Date.now();
 
