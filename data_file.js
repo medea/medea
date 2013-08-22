@@ -20,6 +20,7 @@ var DataFile = module.exports = function() {
   this.hintOffset = 0;
   this.timestamp = null;
   this.writeLock = null;
+  this.closingHintFile = false;
 };
 
 DataFile.create = function(dirname, cb) {
@@ -66,6 +67,7 @@ DataFile.createSync = function(dirname) {
   var filename = dirname + '/' + stamp + '.medea.data';
   var file = new DataFile();
   file.filename = filename;
+  file.dirname = dirname;
   var val1 = fileops.openSync(file)
 
   var hintFilename = dirname + '/' + stamp + '.medea.hint';
@@ -97,7 +99,7 @@ DataFile.prototype.writeSync = function(bufs) {
 
 
 DataFile.prototype.closeForWriting = function(cb) {
-  if (this.offset === 0 || this.readOnly) {
+  if (this.readOnly) {
     if (cb) cb();
     return;
   }
@@ -108,24 +110,21 @@ DataFile.prototype.closeForWriting = function(cb) {
       cb(err);
       return;
     }
-    if (self.hintFd) {
-      self._closeHintFile(function() {
-        if (cb) cb();
-      });
-    } else {
-      if (cb) cb();
-    }
+
+    self._closeHintFile(function(err) {
+      if (cb) cb(err);
+    });
   });
 };
 
 DataFile.prototype.closeForWritingSync = function() {
-  if (this.offset === 0 || this.readOnly) {
+  if (this.readOnly) {
     return;
   }
 
-  if (this.hintFd) {
-    this._closeHintFileSync();
-  }
+  fs.fsyncSync(this.fd);
+
+  this._closeHintFileSync();
 };
 
 DataFile.prototype._closeHintFile = function(cb) {
@@ -144,7 +143,7 @@ DataFile.prototype._closeHintFile = function(cb) {
   this.writeHintFile(crcBuf, function() {
     fs.fsync(that.hintFd, function(err) {
       if (err) {
-        console.log('Error fsyncing hint file during close.', err);
+        //console.log('Error fsyncing hint file during close.', err);
         if (cb) cb(err);
         return;
       }
@@ -159,7 +158,6 @@ DataFile.prototype._closeHintFile = function(cb) {
 
 DataFile.prototype._closeHintFileSync = function() {
   if (!this.hintFd || this.closingHintFile) {
-    if (cb) cb();
     return;
   }
 
@@ -170,7 +168,6 @@ DataFile.prototype._closeHintFileSync = function() {
   this.hintCrc.copy(crcBuf, 0, 0, this.hintCrc.length);
 
   var that = this;
-  this.writeSync(hintFilename, this.hintFd, crcBuf);
   fs.fsyncSync(this.hintFd);
   fs.closeSync(this.hintFd);
   this.hintFd = null;
