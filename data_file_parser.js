@@ -35,9 +35,9 @@ DataFileParser.prototype.parse = function() {
     curlen = chunk.length;
 
     if (waiting.length) {
-      if (!chunk) {
+      /*if (!chunk) {
         chunk = new Buffer(0);
-      }
+      }*/
       chunk = Buffer.concat([waiting, chunk]);
       curlen = chunk.length;
       waiting = new Buffer(0);

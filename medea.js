@@ -14,14 +14,14 @@ var writeCheck = constants.writeCheck;
 
 var tombstone = new Buffer('medea_tombstone');
 
-var FileStatus = function() {
+/*var FileStatus = function() {
   this.filename = null;
   this.fragmented = null;
   this.deadBytes = null;
   this.totalBytes = null;
   this.oldestTimestamp = null;
   this.newestTimestamp = null;
-};
+};*/
 
 var Medea = module.exports = function(options) {
   this.active = null;
@@ -373,6 +373,8 @@ Medea.prototype.put = function(k, v, cb) {
 };
 
 Medea.prototype._wrapWriteFileSync = function(oldFile) {
+  var isActive = true;
+
   if (!oldFile) {
     oldFile = this.active;
   }
@@ -478,49 +480,50 @@ Medea.prototype.mapReduce = function(options, cb) {
     }
   };
 
-  var keys = that.listKeys();
-  var len = keys.length;
+  that.listKeys(function(err, keys) {
+    var len = keys.length;
 
-  var i = 0;
-  var acc;
+    var i = 0;
+    var acc;
 
-  var iterator = function(keys, i, len, cb1) {
-    if (i < len) {
-      that.get(keys[i], function(val) {
-        map(keys[i], val, mapper(keys[i]));
-        iterator(keys, i+1, len, cb1);
-      });
-    } else {
-      if (!group) {
-        var remapped = {};
-        mapped.forEach(function(item) {
-          if (!remapped[item.key]) {
-            remapped[item.key] = [];
-          }
-
-          remapped[item.key].push(item.value);
-        });
-
-        Object.keys(remapped).forEach(function(key) {
-          if ((!startKey || (item.key >= startKey)) &&
-              (!endKey || item.key <= endKey)) {
-            acc = reduce(key, remapped[key]);
-          }
+    var iterator = function(keys, i, len, cb1) {
+      if (i < len) {
+        that.get(keys[i], function(val) {
+          map(keys[i], val, mapper(keys[i]));
+          iterator(keys, i+1, len, cb1);
         });
       } else {
-        mapped.forEach(function(item) {
-          if ((!startKey || (item.key >= startKey)) &&
-              (!endKey || item.key <= endKey)) {
-            acc = reduce(item.key, item.value);
-          }
-        });
+        if (!group) {
+          var remapped = {};
+          mapped.forEach(function(item) {
+            if (!remapped[item.key]) {
+              remapped[item.key] = [];
+            }
+
+            remapped[item.key].push(item.value);
+          });
+
+          Object.keys(remapped).forEach(function(key) {
+            if ((!startKey || (item.key >= startKey)) &&
+                (!endKey || item.key <= endKey)) {
+              acc = reduce(key, remapped[key]);
+            }
+          });
+        } else {
+          mapped.forEach(function(item) {
+            if ((!startKey || (item.key >= startKey)) &&
+                (!endKey || item.key <= endKey)) {
+              acc = reduce(item.key, item.value);
+            }
+          });
+        }
+
+        cb1(acc);
       }
+    };
 
-      cb1(acc);
-    }
-  };
-
-  iterator(keys, 0, len, cb);
+    iterator(keys, 0, len, cb);
+  });
 };
 
 Medea.prototype.sync = function(file, cb) {

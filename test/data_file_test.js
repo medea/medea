@@ -3,7 +3,8 @@ var fs = require('fs');
 var rimraf = require('rimraf');
 var DataFile = require('../data_file');
 
-var directory = __dirname + '/tmp';
+var directory = __dirname + '/tmp/data_file_test';
+
 describe('DataFile', function() {
   describe('.create', function() {
     it('creates a data file asynchronously', function(done) {
@@ -228,9 +229,9 @@ describe('DataFile', function() {
     });
   });
 
-  after(function(done) {
+  /*after(function(done) {
     rimraf(directory, function() {
       done();
     });
-  });
+  });*/
 });
