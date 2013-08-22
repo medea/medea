@@ -15,7 +15,7 @@ var DataEntry = module.exports = function(buffer) {
 DataEntry.fromBuffer = function(buf) {
   var entry = new DataEntry(buf);
 
-  entry.crc = buf.slice(headerOffsets.crc, 3);
+  entry.crc = buf.slice(headerOffsets.crc, sizes.crc);
   entry.timestamp = buf.readDoubleBE(headerOffsets.timestamp);
   entry.keySize = buf.readUInt16BE(headerOffsets.keysize);
   entry.valueSize = buf.readUInt32BE(headerOffsets.valsize);
