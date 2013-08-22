@@ -37,9 +37,9 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
     curlen = chunk.length;
 
     if (waiting.length) {
-      if (!chunk) {
+      /*if (!chunk) {
         chunk = new Buffer(0);
-      }
+      }*/
       chunk = Buffer.concat([waiting, chunk]);
       curlen = chunk.length;
       waiting = new Buffer(0);

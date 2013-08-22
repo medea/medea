@@ -70,12 +70,19 @@ describe('HintFileParser', function() {
   describe('.parse', function() {
     before(function(done) {
       var count = 0;
-      for (var i = 0; i < 3; i++) {
+      var max = 10;
+      for (var i = 0; i < max; i++) {
         DataFile.create(directory, function(err, file) {
-          var buf = createStringBuffer('hello' + i, 'world');
+          var val = new Buffer(500);
+          val.fill('v');
+          var buf = createStringBuffer('hello' + i, val.toString());
+          file.writeSync(buf);
+          var buf = createStringBuffer('hello1' + i, val.toString());
+          file.writeSync(buf);
+          var buf = createStringBuffer('hello2' + i, val.toString());
           file.writeSync(buf);
           var oldOffset = file.offset;
-          var hintBufs = createHintBuffer(file, buf, 'hello' + i, 'world');
+          var hintBufs = createHintBuffer(file, buf, 'hello' + i, val.toString());
           file.writeHintFile(hintBufs, function(err) {
             if (err) {
               if (cb) cb(err);
@@ -86,14 +93,14 @@ describe('HintFileParser', function() {
 
             var entry = new KeyDirEntry();
             entry.fileId = file.timestamp;
-            entry.valueSize = 'world'.length;
+            entry.valueSize = val.length;
             entry.valuePosition = oldOffset + sizes.header + ('hello' + i).length;
             entry.timestamp = Date.now();
 
             keydir[k] = entry;
 
             count++;
-            if (count === 3) {
+            if (count === max) {
               done();
             }
           });
@@ -106,6 +113,13 @@ describe('HintFileParser', function() {
     it('parses hint file entries', function(done) {
       HintFileParser.parse(directory, arr, keydir, function(err) {
         assert(!!Object.keys(keydir).length);
+        done();
+      });
+    });
+
+    it('fires the callback even with an empty file array', function(done) {
+      HintFileParser.parse(directory, [], keydir, function(err) {
+        assert(!err);
         done();
       });
     });
