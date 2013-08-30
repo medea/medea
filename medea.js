@@ -388,8 +388,8 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
   if (isActive) {
     this.isWrapping = true;
     this.writeLock.writeActiveFileSync(this.dirname, file);
-    this.readableFiles.push(file);
     this.active = file;
+    this.readableFiles.push(file);
     oldFile.closeForWritingSync();
     this.bytesToBeWritten = 0;
   } else {
@@ -577,6 +577,10 @@ Medea.prototype.compact = function(cb) {
 
   this.activeMerge = DataFile.createSync(this.dirname);
 
+  if (!files.length) {
+    return cb();
+  }
+
   var self = this;
   this._compactFile(files, 0, function(err) {
     if (err) {
@@ -603,6 +607,8 @@ Medea.prototype.compact = function(cb) {
           if (cb) cb(err);
           return;
         }
+
+        self.readableFiles.push(self.activeMerge);
 
         if (cb) cb();
       });
@@ -744,7 +750,6 @@ Medea.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
       //key
       key.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
 
-      //console.log(hintBufs.readUInt32BE(10))
       file.writeHintFile(hintBufs, function(err) {
         if (err) {
           if (cb) cb(err);
