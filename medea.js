@@ -257,12 +257,10 @@ Medea.prototype.close = function(cb) {
       fs.unlink(that.active.filename, function(err) {
         fs.close(that.active.fd, function() {
           fs.unlink(that.active.filename.replace('.data', '.hint'), function(err) {
-            fs.close(that.active.hintFd, function() {
-              fs.unlink(that.writeLock.filename, function(err) {
-                fs.close(that.writeLock.fd, function() {
-                  that._closeReadableFiles();
-                  if (cb) cb();
-                });
+            fs.unlink(that.writeLock.filename, function(err) {
+              fs.close(that.writeLock.fd, function() {
+                that._closeReadableFiles();
+                if (cb) cb();
               });
             });
           });
