@@ -1,4 +1,5 @@
 var fs = require('fs');
+var bufferEqual = require('buffer-equal')
 var crc32 = require('buffer-crc32');
 var constants = require('./constants');
 var fileops = require('./fileops');
@@ -13,6 +14,9 @@ var headerOffsets = constants.headerOffsets;
 var writeCheck = constants.writeCheck;
 
 var tombstone = new Buffer('medea_tombstone');
+var isTombstone = function (buffer) {
+  return bufferEqual(buffer, tombstone)
+}
 
 /*var FileStatus = function() {
   this.filename = null;
@@ -422,7 +426,7 @@ Medea.prototype.get = function(key, cb) {
         return;
       }
 
-      if (buf.toString() !== tombstone.toString()) {
+      if (!isTombstone(buf)) {
         cb(null, buf);
       } else {
         if (cb) cb();
@@ -631,7 +635,7 @@ Medea.prototype._compactFile = function(files, index, cb) {
       return;
     }
 
-   if (entry.value.toString() === tombstone.toString()) {
+   if (!isTombstone(entry.value)) {
      var newEntry = new KeyDirEntry();
      newEntry.valuePosition = entry.valuePosition;
      newEntry.valueSize = entry.valueSize;
