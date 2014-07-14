@@ -288,7 +288,7 @@ Medea.prototype.put = function(k, v, cb) {
     k = new Buffer(k.toString());
   }
 
-  if (!(v instanceof Buffer)) {
+  if (!(v instanceof Buffer) && typeof v !== 'string') {
     v = new Buffer(v.toString());
   }
 
@@ -320,7 +320,10 @@ Medea.prototype.put = function(k, v, cb) {
     lineBuffer.writeUInt32BE(value.length, headerOffsets.valsize);
 
     key.copy(lineBuffer, headerOffsets.valsize + sizes.valsize);
-    value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
+    if (typeof(value) === 'string')
+      lineBuffer.write(value, headerOffsets.valsize + sizes.valsize + key.length);
+    else
+      value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
 
     //using slice we are just referencing the originial buffer
     var crcBuf = crc32(lineBuffer.slice(headerOffsets.timestamp,  headerOffsets.valsize+ sizes.valsize));

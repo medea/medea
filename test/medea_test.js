@@ -18,8 +18,15 @@ describe('Medea', function() {
   });
 
   describe('#put', function() {
-    it('successfully stores a value', function(done) {
+    it('successfully stores a String value', function(done) {
       db.put('hello', 'world', function(err) {
+        assert(!err);
+        done();
+      });
+    });
+
+    it('successfully stores a Buffer value', function (done) {
+      db.put('foo', new Buffer('bar'), function(err) {
         assert(!err);
         done();
       });
@@ -31,6 +38,15 @@ describe('Medea', function() {
       db.put('hello', 'world', function(err) {
         db.get('hello', function(err, val) {
           assert.equal(val.toString(), 'world');
+          done();
+        });
+      });
+    });
+
+    it('successfully retrieves a value', function(done) {
+      db.put('foo', new Buffer('bar'), function(err) {
+        db.get('foo', function(err, val) {
+          assert.equal(val.toString(), 'bar');
           done();
         });
       });
