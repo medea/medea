@@ -405,7 +405,6 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
 Medea.prototype.get = function(key, cb) {
   var entry = this.keydir[key];
   if (entry) {
-    var readBuffer = new Buffer(entry.valueSize);
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
     var fd;
     this.readableFiles.forEach(function(df) {
