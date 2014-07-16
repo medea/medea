@@ -6,10 +6,12 @@ var db;
 
 describe('Medea', function() {
   before(function(done) {
-    db = new Medea({ maxFileSize: 1024*1024 });
-    db.open(directory, function(err) {
-      done();
-    });
+    require('rimraf')(directory, function () {
+      db = new Medea({ maxFileSize: 1024*1024 });
+      db.open(directory, function(err) {
+        done();
+      });
+    })
   });
 
   it('has a max file size', function() {

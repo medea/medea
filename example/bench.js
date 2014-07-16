@@ -10,14 +10,16 @@ var medea = new Medea();
 var i = 0;
 var MAX_RUNS = 100000;
 
-medea.open(function() {
-  run('set small', setSmall, function() {
-    run('set medium', setMedium, function() {
-      run('set large', setLarge, function() {
-        run('get large', getLarge, function() {
-          run('get medium', getMedium, function() {
-            run('get small', getSmall, function() {
-              medea.close()
+require('rimraf')(process.cwd() + '/medea', function () {
+  medea.open(function() {
+    run('set small', setSmall, function() {
+      run('set medium', setMedium, function() {
+        run('set large', setLarge, function() {
+          run('get large', getLarge, function() {
+            run('get medium', getMedium, function() {
+              run('get small', getSmall, function() {
+                medea.close()
+              });
             });
           });
         });

@@ -1,11 +1,14 @@
 var assert = require('assert');
 var fs = require('fs');
-var rimraf = require('rimraf');
 var DataFile = require('../data_file');
 
 var directory = __dirname + '/tmp/data_file_test';
 
 describe('DataFile', function() {
+  before(function (done) {
+    require('rimraf')(directory, done);
+  });
+
   describe('.create', function() {
     it('creates a data file asynchronously', function(done) {
       DataFile.create(directory, function(err, file) {
@@ -228,10 +231,4 @@ describe('DataFile', function() {
       assert(!file.hintFd);
     });
   });
-
-  /*after(function(done) {
-    rimraf(directory, function() {
-      done();
-    });
-  });*/
 });

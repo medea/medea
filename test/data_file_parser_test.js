@@ -45,10 +45,12 @@ function writeBuffers(bufs) {
 
 describe('DataFileParser', function() {
   before(function(done) {
-    DataFile.create(directory, function(err, f) {
-      file = f;
-      done();
-    });
+    require('rimraf')(directory, function () {
+      DataFile.create(directory, function(err, f) {
+        file = f;
+        done();
+      });
+    })
   });
 
   describe('#parse', function() {
