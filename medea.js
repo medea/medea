@@ -62,6 +62,7 @@ var Medea = module.exports = function(options) {
   this.readOnly = false;
   this.bytesToBeWritten = 0;
   this.readableFiles = [];
+  this.fileReferences = {};
 };
 
 Medea.prototype.open = function(dir, options, cb) {
@@ -570,12 +571,12 @@ Medea.prototype.compact = function(cb) {
    */
 
   var unlink = function(filenames, index, cb) {
-    fs.unlink(filenames[index], function(err) {
-      if (index === filenames.length - 1) {
-        cb();
-        return;
-      }
+    if (index === filenames.length) {
+      cb();
+      return;
+    }
 
+    fs.unlink(filenames[index], function(err) {
       unlink(filenames, ++index, cb);
     });
   };
@@ -605,12 +606,17 @@ Medea.prototype.compact = function(cb) {
       return;
     }
 
-    var dataFileNames = files.map(function(f) {
-      return f.filename;
-    });
+    var dataFileNames = files
+      .filter(function (f) {
+        // console.log(self.fileReferences, f, !self.fileReferences[f.timestamp])
+        return !self.fileReferences[f.timestamp];
+      })
+      .map(function(f) {
+        return f.filename;
+      });
 
-    var hintFileNames = files.map(function(f) {
-      return f.filename.replace('.data', '.hint');
+    var hintFileNames = dataFileNames.map(function(filename) {
+      return filename.replace('.data', '.hint');
     });
 
     self.sync(self.activeMerge, function(err) {
@@ -625,7 +631,10 @@ Medea.prototype.compact = function(cb) {
           return;
         }
 
-        self.readableFiles = [ currentFile, self.activeMerge ];
+        self.readableFiles.push(self.activeMerge);
+        self.readableFiles = self.readableFiles.filter(function (file) {
+          return fs.existsSync(file.filename);
+        });
 
         if (cb) cb();
       });

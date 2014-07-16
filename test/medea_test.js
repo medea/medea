@@ -165,6 +165,7 @@ describe('Medea', function() {
       describe('#get', function () {
         it('successfully retrieves a value', function (done) {
           db.get('beep', snapshot, function (err, value) {
+            assert(!err, 'should not Error');
             assert.equal(value.toString(), 'boop');
             db.get('beep2', snapshot, function (err, value2) {
               assert.equal(value2.toString(), 'boop2');
