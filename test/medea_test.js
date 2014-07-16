@@ -129,3 +129,12 @@ describe('Medea', function() {
     db.close(done);
   });
 });
+
+describe('Medea#open() and then directly #close()', function () {
+  it('should not error', function (done) {
+    db = new Medea({});
+    db.open(directory, function(err) {
+      db.close(done)
+    });
+  })
+})
