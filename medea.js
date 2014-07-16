@@ -1,4 +1,5 @@
 var fs = require('fs');
+var bufferEqual = require('buffer-equal')
 var crc32 = require('buffer-crc32');
 var constants = require('./constants');
 var fileops = require('./fileops');
@@ -13,6 +14,9 @@ var headerOffsets = constants.headerOffsets;
 var writeCheck = constants.writeCheck;
 
 var tombstone = new Buffer('medea_tombstone');
+var isTombstone = function (buffer) {
+  return bufferEqual(buffer, tombstone)
+}
 
 /*var FileStatus = function() {
   this.filename = null;
@@ -284,7 +288,7 @@ Medea.prototype.put = function(k, v, cb) {
     k = new Buffer(k.toString());
   }
 
-  if (!(v instanceof Buffer)) {
+  if (!(v instanceof Buffer) && typeof v !== 'string') {
     v = new Buffer(v.toString());
   }
 
@@ -316,7 +320,10 @@ Medea.prototype.put = function(k, v, cb) {
     lineBuffer.writeUInt32BE(value.length, headerOffsets.valsize);
 
     key.copy(lineBuffer, headerOffsets.valsize + sizes.valsize);
-    value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
+    if (typeof(value) === 'string')
+      lineBuffer.write(value, headerOffsets.valsize + sizes.valsize + key.length);
+    else
+      value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
 
     //using slice we are just referencing the originial buffer
     var crcBuf = crc32(lineBuffer.slice(headerOffsets.timestamp,  headerOffsets.valsize+ sizes.valsize));
@@ -401,7 +408,6 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
 Medea.prototype.get = function(key, cb) {
   var entry = this.keydir[key];
   if (entry) {
-    var readBuffer = new Buffer(entry.valueSize);
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
     var fd;
     this.readableFiles.forEach(function(df) {
@@ -422,7 +428,7 @@ Medea.prototype.get = function(key, cb) {
         return;
       }
 
-      if (buf.toString() !== tombstone.toString()) {
+      if (!isTombstone(buf)) {
         cb(null, buf);
       } else {
         if (cb) cb();
@@ -631,7 +637,7 @@ Medea.prototype._compactFile = function(files, index, cb) {
       return;
     }
 
-   if (entry.value.toString() === tombstone.toString()) {
+   if (!isTombstone(entry.value)) {
      var newEntry = new KeyDirEntry();
      newEntry.valuePosition = entry.valuePosition;
      newEntry.valueSize = entry.valueSize;
