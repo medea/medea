@@ -121,6 +121,78 @@ describe('Medea', function() {
     });
   });
 
+  describe('#createSnapshot', function () {
+    var snapshot
+    before(function (done) {
+      db.put('beep', 'boop', function () {
+        db.put('beep2', 'boop2', function () {
+          snapshot = db.createSnapshot()
+          db.remove('beep', function () {
+            db.put('beep2', 'bong', done);
+          });
+        });
+      });
+    });
+
+    describe('#get', function () {
+      it('successfully retrieves a value', function (done) {
+        db.get('beep', snapshot, function (err, value) {
+          assert.equal(value.toString(), 'boop');
+          db.get('beep2', snapshot, function (err, value2) {
+            assert.equal(value2.toString(), 'boop2');
+            done();
+          });
+        });
+      });
+      describe('not using snapshot', function () {
+        it('successfully retrieves a value', function (done) {
+          db.get('beep', function (err, value) {
+            assert.equal(value, undefined);
+            db.get('beep2', function (err, value2) {
+              assert.equal(value2.toString(), 'bong');
+              done();
+            });
+          });
+        });
+      });
+    });
+
+    describe('#compact', function (done) {
+      before(function (done) {
+        db.compact(done);
+      });
+
+      describe('#get', function () {
+        it('successfully retrieves a value', function (done) {
+          db.get('beep', snapshot, function (err, value) {
+            assert.equal(value.toString(), 'boop');
+            db.get('beep2', snapshot, function (err, value2) {
+              assert.equal(value2.toString(), 'boop2');
+              done();
+            });
+          });
+        });
+      });
+    });
+
+    describe('snapshot#close', function (done) {
+      before(function (done) {
+        snapshot.close();
+        done();
+      });
+
+      describe('#get', function () {
+        it('returns error about snapshot being closed', function (done) {
+          db.get('beep', snapshot, function (err) {
+            assert(err instanceof Error);
+            assert.equal(err.message, 'Snapshot is closed');
+            done();
+          });
+        });
+      });
+    });
+  });
+
   it('successfully writes large amounts of data', function(done) {
     var max = 5000;
     var put = function(index) {
