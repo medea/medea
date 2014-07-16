@@ -577,7 +577,7 @@ Medea.prototype.compact = function(cb) {
     return 0;
   });
 
-  files.shift(); // remove current file.
+  var currentFile = files.shift(); // remove current file.
 
   this.activeMerge = DataFile.createSync(this.dirname);
 
@@ -612,7 +612,7 @@ Medea.prototype.compact = function(cb) {
           return;
         }
 
-        self.readableFiles.push(self.activeMerge);
+        self.readableFiles = [ currentFile, self.activeMerge ];
 
         if (cb) cb();
       });
@@ -633,7 +633,7 @@ Medea.prototype._compactFile = function(files, index, cb) {
   parser.on('entry', function(entry) {
     var outOfDate = self._outOfDate([self.keydir, self.delKeyDir], false, entry);
     if (outOfDate) {
-      delete self.keydir[entry.key];
+      // delete self.keydir[entry.key];
       return;
     }
 
