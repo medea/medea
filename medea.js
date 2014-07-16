@@ -8,6 +8,7 @@ var DataFileParser = require('./data_file_parser');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
+var Snapshot = require('./snapshot');
 
 var sizes = constants.sizes;
 var headerOffsets = constants.headerOffsets;
@@ -405,8 +406,16 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
   return file;
 };
 
-Medea.prototype.get = function(key, cb) {
-  var entry = this.keydir[key];
+Medea.prototype.get = function(key, snapshot, cb) {
+  if (!cb) {
+    cb = snapshot;
+    snapshot = undefined;
+  }
+
+  if (snapshot && snapshot.closed)
+    return cb(new Error('Snapshot is closed'));
+
+  var entry = snapshot ? snapshot.keydir[key] : this.keydir[key];
   if (entry) {
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
     var fd;
@@ -463,6 +472,10 @@ var MappedItem = function() {
   this.key = null;
   this.value = null;
 };
+
+Medea.prototype.createSnapshot = function () {
+  return new Snapshot(this);
+}
 
 Medea.prototype.mapReduce = function(options, cb) {
   var that = this;
