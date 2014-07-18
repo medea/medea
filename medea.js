@@ -3,6 +3,7 @@ var bufferEqual = require('buffer-equal')
 var crc32 = require('buffer-crc32');
 var constants = require('./constants');
 var fileops = require('./fileops');
+var DataBuffer = require('./data_buffer');
 var DataEntry = require('./data_entry');
 var DataFile = require('./data_file');
 var DataFileParser = require('./data_file_parser');
@@ -310,8 +311,8 @@ Medea.prototype.put = function(k, v, cb) {
   next(function(err, file) {
     var key = k;
     var value = v;
-    var dataEntry = DataEntry.fromKeyValuePair(key, value);
-    var lineBuffer = dataEntry.buffer
+    var ts = Date.now();
+    var lineBuffer = DataBuffer.fromKeyValuePair(key, value, ts);
 
     file.write(lineBuffer, function(err) {
       if (err) {
@@ -349,9 +350,125 @@ Medea.prototype.put = function(k, v, cb) {
         entry.fileId = file.timestamp;
         entry.valueSize = value.length;
         entry.valuePosition = oldOffset + sizes.header + key.length;
-        entry.timestamp = dataEntry.timestamp;
+        entry.timestamp = ts;
 
         that.keydir[k] = entry;
+
+        if (cb) cb();
+      });
+    });
+  });
+};
+
+Medea.prototype.write = function(batch, options, cb) {
+  if (typeof options === 'function') {
+    cb = options;
+    options = null;
+  }
+
+  options = options || {};
+  options.sync = options.sync || true;
+
+  var file = this.active;
+
+  var batchBuffers = [];
+  var batchSize = 0;
+
+  batch.entries.forEach(function(entry) {
+    var buffer = DataBuffer.fromKeyValuePair(entry.key, entry.value);
+    batchBuffers.push(buffer);
+    batchSize += buffer.length;
+  });
+
+  var bytesToBeWritten = batchSize;
+  this.bytesToBeWritten += bytesToBeWritten;
+
+  var that = this;
+  var next = function(cb) { cb(null, file); };
+  var check = this._checkWrite();
+  if (check === writeCheck.wrap) {
+    next = function(cb) {
+      var file = that._wrapWriteFileSync(file);
+      cb(null, file);
+    };
+  }
+
+  next(function(err, file) {
+    var lineBuffer = Buffer.concat(batchBuffers, batch.size);
+
+    file.write(lineBuffer, { sync: options.sync }, function(err) {
+      if (err) {
+        if (cb) cb(err);
+        return;
+      }
+
+      var oldOffset = file.offset;
+      file.offset += lineBuffer.length;
+
+      var dataEntries = batchBuffers.map(function(buffer) {
+        return DataEntry.fromBuffer(buffer);
+      });
+      var hintBufs = [];
+      var hintBufsSize = 0;
+      var newHintCrc = file.hintCrc;
+      var keydirDelta = {};
+
+      var copyBufferOffset = 0;
+
+      dataEntries.forEach(function(dataEntry) {
+        var key = dataEntry.key;
+        var value = dataEntry.value;
+
+        var totalSz = dataEntry.keySize + dataEntry.valueSize + sizes.header;
+
+        var hintBuf = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
+
+        //timestamp
+        lineBuffer.copy(hintBuf, 0,
+          copyBufferOffset + headerOffsets.timestamp,
+          copyBufferOffset + headerOffsets.timestamp + sizes.timestamp);
+
+        //keysize
+        lineBuffer.copy(hintBuf, sizes.timestamp,
+          copyBufferOffset + headerOffsets.keysize,
+          copyBufferOffset + headerOffsets.keysize + sizes.keysize);
+
+        //total size
+        hintBuf.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
+        //offset
+        hintBuf.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
+        //key
+        key.copy(hintBuf, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
+
+        hintBufsSize += hintBuf.length;
+        hintBufs.push(hintBuf);
+        newHintCrc = crc32(hintBuf, newHintCrc);
+        
+        var entry = new KeyDirEntry();
+        entry.fileId = file.timestamp;
+        entry.valueSize = value.length;
+        entry.valuePosition = oldOffset + sizes.header + key.length;
+        entry.timestamp = dataEntry.timestamp;
+
+        keydirDelta[key] = entry;
+
+        oldOffset += dataEntry.buffer.length;
+        copyBufferOffset += dataEntry.buffer.length;
+      });
+
+      var hintBuffersToBeWritten = Buffer.concat(hintBufs, hintBufsSize);
+      file.writeHintFile(hintBuffersToBeWritten, function(err) {
+        if (err) {
+          if (cb) cb(err);
+          return;
+        }
+
+        file.hintCrc = newHintCrc;
+        file.hintOffset += hintBufsSize;
+
+        Object.keys(keydirDelta).forEach(function(key) {
+          that.keydir[key] = keydirDelta[key];
+        });
 
         if (cb) cb();
       });
@@ -438,10 +555,6 @@ Medea.prototype.remove = function(key, cb) {
 
 Medea.prototype.createBatch = function() {
   return new WriteBatch();
-};
-
-Medea.prototype.write = function(batch, cb) {
-  // write a batch
 };
 
 Medea.prototype.listKeys = function(cb) {

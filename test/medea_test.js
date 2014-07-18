@@ -66,6 +66,49 @@ describe('Medea', function() {
     });
   });
 
+  describe('#write', function() {
+    it('supports single put operations', function(done) {
+      var batch = db.createBatch();
+      batch.put('hello', 'world');
+      db.write(batch, function() {
+        db.get('hello', function(err, val) {
+          assert.equal(val.toString(), 'world');
+          done();
+        });
+      });
+    });
+
+    it('supports single remove operations', function(done) {
+      db.put('hello','world', function() {
+        var batch = db.createBatch();
+        batch.remove('hello');
+        db.write(batch, function() {
+          db.get('hello', function(err, val) {
+            assert(!val);
+            done();
+          });
+        });
+      });
+    });
+
+    it('supports both put and remove operations', function(done) {
+      db.put('hello','world', function() {
+        var batch = db.createBatch();
+        batch.put('hello2', 'world2');
+        batch.remove('hello');
+        db.write(batch, function() {
+          db.get('hello2', function(err, val) {
+            assert.equal(val.toString(), 'world2');
+            db.get('hello', function(err, val) {
+              assert(!val);
+              done();
+            });
+          });
+        });
+      });
+    });
+  });
+
   describe('#sync', function() {
     it('successfully fsync()\'s files', function(done) {
       db.sync(function(err) {
