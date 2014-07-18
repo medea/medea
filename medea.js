@@ -3,11 +3,13 @@ var bufferEqual = require('buffer-equal')
 var crc32 = require('buffer-crc32');
 var constants = require('./constants');
 var fileops = require('./fileops');
+var DataEntry = require('./data_entry');
 var DataFile = require('./data_file');
 var DataFileParser = require('./data_file_parser');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
+var WriteBatch = require('./write_batch');
 
 var sizes = constants.sizes;
 var headerOffsets = constants.headerOffsets;
@@ -306,30 +308,10 @@ Medea.prototype.put = function(k, v, cb) {
   }
 
   next(function(err, file) {
-    var ts = Date.now();
-
-    /**
-     * [crc][timestamp][keysz][valuesz][key][value]
-     */
-    var lineBuffer = new Buffer(sizes.header + k.length + v.length);
     var key = k;
     var value = v;
-
-    lineBuffer.writeDoubleBE(ts, headerOffsets.timestamp);
-    lineBuffer.writeUInt16BE(key.length, headerOffsets.keysize);
-    lineBuffer.writeUInt32BE(value.length, headerOffsets.valsize);
-
-    key.copy(lineBuffer, headerOffsets.valsize + sizes.valsize);
-    if (typeof(value) === 'string')
-      lineBuffer.write(value, headerOffsets.valsize + sizes.valsize + key.length);
-    else
-      value.copy(lineBuffer, headerOffsets.valsize + sizes.valsize + key.length);
-
-    //using slice we are just referencing the originial buffer
-    var crcBuf = crc32(lineBuffer.slice(headerOffsets.timestamp,  headerOffsets.valsize+ sizes.valsize));
-    crcBuf = crc32(key, crcBuf);
-    crcBuf = crc32(value, crcBuf);
-    crcBuf.copy(lineBuffer)
+    var dataEntry = DataEntry.fromKeyValuePair(key, value);
+    var lineBuffer = dataEntry.buffer
 
     file.write(lineBuffer, function(err) {
       if (err) {
@@ -367,7 +349,7 @@ Medea.prototype.put = function(k, v, cb) {
         entry.fileId = file.timestamp;
         entry.valueSize = value.length;
         entry.valuePosition = oldOffset + sizes.header + key.length;
-        entry.timestamp = ts;
+        entry.timestamp = dataEntry.timestamp;
 
         that.keydir[k] = entry;
 
@@ -452,6 +434,14 @@ Medea.prototype.remove = function(key, cb) {
       if(cb) cb();
     }
   });
+};
+
+Medea.prototype.createBatch = function() {
+  return new WriteBatch();
+};
+
+Medea.prototype.write = function(batch, cb) {
+  // write a batch
 };
 
 Medea.prototype.listKeys = function(cb) {
