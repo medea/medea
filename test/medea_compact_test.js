@@ -54,11 +54,16 @@ describe('Medea#compact', function() {
     after(shutdown);
   });
 
-  describe('Multiple time overwriting same key', function () {
+  describe('Multiple time writing different keys', function () {
     before(setup);
 
     for(var i = 0; i < 50; i++) {
       it('successfully writing different key', function (done) {
+        var test = function (index) {
+          if (index === 50)
+            return done();
+
+        }
         var buffer1 = new Buffer(50),
           buffer2 = new Buffer(50),
           buffer3 = new Buffer(50);

@@ -35,8 +35,9 @@ Compactor.prototype.compact = function (cb) {
 
     return 0;
   });
-
   var currentFile = files.shift(); // remove current file.
+
+  this.db.readableFiles = [ currentFile ];
 
   this.activeMerge = DataFile.createSync(this.db.dirname);
 
@@ -71,7 +72,7 @@ Compactor.prototype.compact = function (cb) {
           return;
         }
 
-        self.db.readableFiles = [ currentFile, self.activeMerge ];
+        self.db.readableFiles.push(self.activeMerge);
 
         if (cb) cb();
       });
