@@ -98,4 +98,57 @@ describe('Medea#compact', function() {
 
     after(shutdown);
   });
+
+  describe('Write large amount of data', function () {
+    before(setup);
+    var max = 20;
+
+    before(function (done) {
+      var put = function(index) {
+        if (index === max) {
+          return done();
+        }
+
+        var buffer = new Buffer(50);
+
+        buffer.fill(index);
+
+        db.put(buffer, buffer, function(err) {
+          if (err) return done(err);
+          put(++index);
+        });
+      }
+
+      put(0);
+    });
+
+    it('successfully compacts', function (done) {
+      db.compact(function (err) {
+        if (err) return done(err);
+        db.compact(function (err) {
+          if (err) return done(err);
+          done()
+        });
+      });
+    });
+
+    it('successfully saves data', function (done) {
+      var get = function (index) {
+        if (index === max) {
+          return done();
+        }
+        var buffer = new Buffer(50);
+        buffer.fill(index);
+
+        db.get(buffer, function (err, value) {
+          if (err) return done(err);
+          assert.deepEqual(value, buffer);
+          get(++index);
+        });
+      }
+      get(0);
+    });
+
+    after(shutdown);
+  })
 });
