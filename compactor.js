@@ -26,17 +26,6 @@ var Compactor = module.exports = function (db) {
  * 5. Delete old files.
  */
 Compactor.prototype.compact = function (cb) {
-  var unlink = function(filenames, index, cb) {
-    fs.unlink(filenames[index], function(err) {
-      if (index === filenames.length - 1) {
-        cb();
-        return;
-      }
-
-      unlink(filenames, ++index, cb);
-    });
-  };
-
   var files = this.db.readableFiles.slice(0).sort(function(a, b) {
     if (a.timestamp < b.timestamp) {
       return 1;
@@ -76,7 +65,7 @@ Compactor.prototype.compact = function (cb) {
         return;
       }
 
-      unlink(dataFileNames.concat(hintFileNames), 0, function(err) {
+      self._unlink(dataFileNames.concat(hintFileNames), 0, function(err) {
         if (err) {
           if (cb) cb(err);
           return;
@@ -87,6 +76,19 @@ Compactor.prototype.compact = function (cb) {
         if (cb) cb();
       });
     });
+  });
+}
+
+Compactor.prototype._unlink = function(filenames, index, cb) {
+  var self = this;
+
+  fs.unlink(filenames[index], function(err) {
+    if (index === filenames.length - 1) {
+      cb();
+      return;
+    }
+
+    self._unlink(filenames, ++index, cb);
   });
 }
 
