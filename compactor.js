@@ -238,8 +238,7 @@ Compactor.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
         entry.fileId = file.timestamp;
         entry.valueSize = value.length;
         entry.valuePosition = oldOffset + sizes.header + key.length;
-        entry.timestamp = dataEntry.timesamp;
-
+        entry.timestamp = dataEntry.timestamp;
 
         fs.fsync(file.fd, function(err) {
           if (err) {
