@@ -32,3 +32,4 @@ exports.fsflags = {
   O_SYNC: 0x1000
 };
 
+exports.tombstone = new Buffer('medea_tombstone');
