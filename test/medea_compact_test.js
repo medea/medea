@@ -18,7 +18,7 @@ describe('Medea#compact', function() {
   describe('Multiple time overwriting same key', function () {
     before(setup);
 
-    for(var i = 0; i < 10; i++) {
+    for(var i = 0; i < 50; i++) {
       it('successfully overwriting same key', function (done) {
         var buffer1 = new Buffer(50),
           buffer2 = new Buffer(50),
@@ -28,9 +28,12 @@ describe('Medea#compact', function() {
         buffer2.fill(2);
         buffer3.fill(3);
 
-        db.put('foo1', buffer1, function () {
-          db.put('foo1', buffer2, function () {
-            db.put('foo1', buffer3, function () {
+        db.put('foo1', buffer1, function (err) {
+          if (err) return done(err);
+          db.put('foo1', buffer2, function (err) {
+            if (err) return done(err);
+            db.put('foo1', buffer3, function (err) {
+              if (err) return done(err);
               db.compact(function (err) {
                 if (err) return done(err)
                 db.compact(function (err) {
@@ -54,7 +57,7 @@ describe('Medea#compact', function() {
   describe('Multiple time overwriting same key', function () {
     before(setup);
 
-    for(var i = 0; i < 10; i++) {
+    for(var i = 0; i < 50; i++) {
       it('successfully writing different key', function (done) {
         var buffer1 = new Buffer(50),
           buffer2 = new Buffer(50),
@@ -64,9 +67,12 @@ describe('Medea#compact', function() {
         buffer2.fill(2);
         buffer3.fill(3);
 
-        db.put('foo1', buffer1, function () {
-          db.put('foo2', buffer2, function () {
-            db.put('foo3', buffer3, function () {
+        db.put('foo1', buffer1, function (err) {
+          if (err) return done(err);
+          db.put('foo2', buffer2, function (err) {
+            if (err) return done(err);
+            db.put('foo3', buffer3, function (err) {
+              if (err) return done(err);
               db.compact(function (err) {
                 if (err) return done(err)
                 db.compact(function (err) {
