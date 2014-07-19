@@ -1,5 +1,6 @@
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
+var timestamp = require('monotonic-timestamp');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -310,7 +311,7 @@ Medea.prototype.put = function(k, v, cb) {
   next(function(err, file) {
     var key = k;
     var value = v;
-    var ts = Date.now();
+    var ts = timestamp();
     var lineBuffer = DataBuffer.fromKeyValuePair(key, value, ts);
 
     file.write(lineBuffer, function(err) {
@@ -374,7 +375,7 @@ Medea.prototype.write = function(batch, options, cb) {
   var batchSize = 0;
 
   batch.entries.forEach(function(entry) {
-    var buffer = DataBuffer.fromKeyValuePair(entry.key, entry.value);
+    var buffer = DataBuffer.fromKeyValuePair(entry.key, entry.value, timestamp());
     batchBuffers.push(buffer);
     batchSize += buffer.length;
   });

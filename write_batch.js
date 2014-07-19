@@ -1,4 +1,5 @@
 var DataEntry = require('./data_entry');
+var timestamp = require('monotonic-timestamp');
 
 var WriteBatch = module.exports = function() {
   this.keys = [];
