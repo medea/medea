@@ -25,3 +25,19 @@ DataEntry.fromBuffer = function(buf) {
 
   return entry;
 };
+
+DataEntry.fromKeyValuePair = function(key, value) {
+  if (!(key instanceof Buffer)) {
+    key = new Buffer(key.toString());
+  }
+
+  if (!(value instanceof Buffer) && typeof value !== 'string') {
+    value = new Buffer(value.toString());
+  }
+
+  var entry = new DataEntry();
+  entry.key = key;
+  entry.value = value;
+
+  return entry;
+};

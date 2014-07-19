@@ -85,8 +85,28 @@ DataFile.createSync = function(dirname) {
   return file;
 };
 
-DataFile.prototype.write = function(bufs, cb) {
-  fs.write(this.fd, bufs, 0, bufs.length, null, cb);
+DataFile.prototype.write = function(bufs, options, cb) {
+  if (typeof options === 'function') {
+    cb = options;
+    options = null;
+  }
+
+  options = options || {};
+  options.sync = options.sync || false;
+
+  var self = this;
+  fs.write(this.fd, bufs, 0, bufs.length, null, function(err) {
+    if (err) {
+      if (cb) cb(err);
+      return;
+    }
+
+    if (options.sync) {
+      fs.fsync(self.fd, cb);
+    } else {
+      cb();
+    }
+  });
 };
 
 DataFile.prototype.writeHintFile = function(bufs, cb) {
