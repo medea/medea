@@ -497,7 +497,7 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
     oldFile.closeForWritingSync();
     this.bytesToBeWritten = 0;
   } else {
-    this.activeMerge = file;
+    this.compactor.activeMerge = file;
     oldFile.closeForWritingSync();
   }
 

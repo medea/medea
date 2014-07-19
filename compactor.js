@@ -180,7 +180,7 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
 Compactor.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
   var file = this.activeMerge;
   var buf = dataEntry.buffer;
-  var bytesToBeWritten = buf.length;
+  this.db.bytesToBeWritten = buf.length;
 
   var that = this;
 
