@@ -11,6 +11,7 @@ var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
 var WriteBatch = require('./write_batch');
+var Snapshot = require('./snapshot');
 
 var sizes = constants.sizes;
 var headerOffsets = constants.headerOffsets;
@@ -64,6 +65,7 @@ var Medea = module.exports = function(options) {
   this.readOnly = false;
   this.bytesToBeWritten = 0;
   this.readableFiles = [];
+  this.fileReferences = {};
 };
 
 Medea.prototype.open = function(dir, options, cb) {
@@ -504,8 +506,16 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
   return file;
 };
 
-Medea.prototype.get = function(key, cb) {
-  var entry = this.keydir[key];
+Medea.prototype.get = function(key, snapshot, cb) {
+  if (!cb) {
+    cb = snapshot;
+    snapshot = undefined;
+  }
+
+  if (snapshot && snapshot.closed)
+    return cb(new Error('Snapshot is closed'));
+
+  var entry = snapshot ? snapshot.keydir[key] : this.keydir[key];
   if (entry) {
     var filename = this.dirname + '/' + entry.fileId + '.medea.data';
     var fd;
@@ -566,6 +576,10 @@ var MappedItem = function() {
   this.key = null;
   this.value = null;
 };
+
+Medea.prototype.createSnapshot = function () {
+  return new Snapshot(this);
+}
 
 Medea.prototype.mapReduce = function(options, cb) {
   var that = this;
@@ -660,12 +674,12 @@ Medea.prototype.compact = function(cb) {
    */
 
   var unlink = function(filenames, index, cb) {
-    fs.unlink(filenames[index], function(err) {
-      if (index === filenames.length - 1) {
-        cb();
-        return;
-      }
+    if (index === filenames.length) {
+      cb();
+      return;
+    }
 
+    fs.unlink(filenames[index], function(err) {
       unlink(filenames, ++index, cb);
     });
   };
@@ -680,7 +694,7 @@ Medea.prototype.compact = function(cb) {
     return 0;
   });
 
-  files.shift(); // remove current file.
+  var currentFile = files.shift(); // remove current file.
 
   this.activeMerge = DataFile.createSync(this.dirname);
 
@@ -695,12 +709,17 @@ Medea.prototype.compact = function(cb) {
       return;
     }
 
-    var dataFileNames = files.map(function(f) {
-      return f.filename;
-    });
+    var dataFileNames = files
+      .filter(function (f) {
+        // console.log(self.fileReferences, f, !self.fileReferences[f.timestamp])
+        return !self.fileReferences[f.timestamp];
+      })
+      .map(function(f) {
+        return f.filename;
+      });
 
-    var hintFileNames = files.map(function(f) {
-      return f.filename.replace('.data', '.hint');
+    var hintFileNames = dataFileNames.map(function(filename) {
+      return filename.replace('.data', '.hint');
     });
 
     self.sync(self.activeMerge, function(err) {
@@ -716,6 +735,9 @@ Medea.prototype.compact = function(cb) {
         }
 
         self.readableFiles.push(self.activeMerge);
+        self.readableFiles = self.readableFiles.filter(function (file) {
+          return fs.existsSync(file.filename);
+        });
 
         if (cb) cb();
       });
@@ -736,7 +758,7 @@ Medea.prototype._compactFile = function(files, index, cb) {
   parser.on('entry', function(entry) {
     var outOfDate = self._outOfDate([self.keydir, self.delKeyDir], false, entry);
     if (outOfDate) {
-      delete self.keydir[entry.key];
+      // delete self.keydir[entry.key];
       return;
     }
 
