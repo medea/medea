@@ -694,7 +694,7 @@ Medea.prototype.compact = function(cb) {
     return 0;
   });
 
-  var currentFile = files.shift(); // remove current file.
+  files.shift(); // remove current file.
 
   this.activeMerge = DataFile.createSync(this.dirname);
 
