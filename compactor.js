@@ -26,18 +26,22 @@ var Compactor = module.exports = function (db) {
  * 5. Delete old files.
  */
 Compactor.prototype.compact = function (cb) {
-  var files = this.db.readableFiles.slice(0).sort(function(a, b) {
-    if (a.timestamp < b.timestamp) {
-      return 1;
-    } else if (a.timestamp > b.timestamp) {
-      return - 1;
-    }
+  var fileReferences = Object.keys(this.db.fileReferences).map(Number);
+  var files = this.db.readableFiles
+    .filter(function (file) {
+      return fileReferences.indexOf(file.timestamp) === -1;
+    })
+    .sort(function(a, b) {
+      if (a.timestamp < b.timestamp) {
+        return 1;
+      } else if (a.timestamp > b.timestamp) {
+        return - 1;
+      }
 
-    return 0;
-  });
-  var currentFile = files.shift(); // remove current file.
-
-  this.db.readableFiles = [ currentFile ];
+      return 0;
+    })
+    // remove current file
+    .slice(1);
 
   this.activeMerge = DataFile.createSync(this.db.dirname);
 
@@ -65,6 +69,11 @@ Compactor.prototype.compact = function (cb) {
         if (cb) cb(err);
         return;
       }
+
+      self.db.readableFiles = self.db.readableFiles
+        .filter(function (file) {
+          return files.indexOf(file) === -1;
+        });
 
       self._unlink(dataFileNames.concat(hintFileNames), 0, function(err) {
         if (err) {
