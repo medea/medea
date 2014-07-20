@@ -2,7 +2,7 @@ var assert = require('assert');
 var fs = require('fs');
 var Medea = require('../');
 
-var directory = __dirname + '/tmp/medea_test';
+var directory = __dirname + '/tmp/medea_compact_test';
 var db;
 var setup = function (done) {
   require('rimraf')(directory, function () {
