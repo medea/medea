@@ -18,8 +18,11 @@ describe('Medea#compact', function() {
   describe('Multiple time overwriting same key', function () {
     before(setup);
 
-    for(var i = 0; i < 50; i++) {
-      it('successfully overwriting same key', function (done) {
+    it('successfully owerwites same key', function (done) {
+      var test = function (index) {
+        if (index === 50)
+          return done();
+
         var buffer1 = new Buffer(50),
           buffer2 = new Buffer(50),
           buffer3 = new Buffer(50);
@@ -41,15 +44,16 @@ describe('Medea#compact', function() {
 
                   db.get('foo1', function (err, value) {
                     assert.deepEqual(value, buffer3);
-                    done();
+                    test(++index);
                   })
                 });
               });
             });
           });
         });
-      });
-    }
+      }
+      test(0);
+    });
 
     after(shutdown);
   });
@@ -57,13 +61,11 @@ describe('Medea#compact', function() {
   describe('Multiple time writing different keys', function () {
     before(setup);
 
-    for(var i = 0; i < 50; i++) {
-      it('successfully writing different key', function (done) {
-        var test = function (index) {
-          if (index === 50)
-            return done();
+    it('successfully writing different key', function (done) {
+      var test = function (index) {
+        if (index === 50)
+          return done();
 
-        }
         var buffer1 = new Buffer(50),
           buffer2 = new Buffer(50),
           buffer3 = new Buffer(50);
@@ -89,7 +91,7 @@ describe('Medea#compact', function() {
                       db.get('foo3', function (err, value) {
                         assert.deepEqual(value, buffer3);
 
-                        done()
+                        test(++index);
                       });
                     });
                   })
@@ -98,8 +100,9 @@ describe('Medea#compact', function() {
             });
           });
         });
-      });
-    }
+      }
+      test(0);
+    });
 
     after(shutdown);
   });
