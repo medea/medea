@@ -5,7 +5,7 @@ var directory = __dirname + '/tmp/medea_test';
 var db;
 var setup = function (done) {
   require('rimraf')(directory, function () {
-    db = new Medea({ maxFileSize: 100 });
+    db = new Medea({ maxFileSize: 512 });
     db.open(directory, done);
   });
 }

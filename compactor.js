@@ -26,10 +26,12 @@ var Compactor = module.exports = function (db) {
  * 5. Delete old files.
  */
 Compactor.prototype.compact = function (cb) {
+  var self = this;
   var fileReferences = Object.keys(this.db.fileReferences).map(Number);
   var files = this.db.readableFiles
     .filter(function (file) {
-      return fileReferences.indexOf(file.timestamp) === -1;
+      return fileReferences.indexOf(file.timestamp) === -1 &&
+        file.timestamp !== self.db.active.timestamp;
     })
     .sort(function(a, b) {
       if (a.timestamp < b.timestamp) {
@@ -39,15 +41,15 @@ Compactor.prototype.compact = function (cb) {
       }
 
       return 0;
-    })
-    // remove current file
-    .slice(1);
-
-  this.activeMerge = DataFile.createSync(this.db.dirname);
+    });
 
   if (!files.length) {
     return cb();
   }
+
+  this.activeMerge = DataFile.createSync(this.db.dirname);
+
+  this.db.readableFiles.push(this.activeMerge)
 
   var self = this;
   this._compactFile(files, 0, function(err) {
@@ -80,8 +82,6 @@ Compactor.prototype.compact = function (cb) {
           if (cb) cb(err);
           return;
         }
-
-        self.db.readableFiles.push(self.activeMerge);
 
         if (cb) cb();
       });
@@ -190,7 +190,7 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
 Compactor.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
   var file = this.activeMerge;
   var buf = dataEntry.buffer;
-  this.db.bytesToBeWritten = buf.length;
+  this.db.bytesToBeWritten += buf.length;
 
   var that = this;
 
