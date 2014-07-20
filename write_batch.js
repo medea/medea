@@ -1,19 +1,21 @@
 var DataEntry = require('./data_entry');
 
 var WriteBatch = module.exports = function() {
-  this.keys = [];
-  this.entries = [];
+  this.operations = [];
 };
 
 WriteBatch.prototype.put = function(key, value) {
-  this._add(key, value);
+  this.operations.push({
+    type: 'put',
+    entry: DataEntry.fromKeyValuePair(key, value)
+  });
 };
 
 WriteBatch.prototype.remove = function(key) {
-  this._add(key, new Buffer('medea_tombstone'));
-};
+  var value = new Buffer('medea_tombstone');
 
-WriteBatch.prototype._add = function(key, value) {
-  this.keys.push(key);
-  this.entries.push(DataEntry.fromKeyValuePair(key, value));
+  this.operations.push({
+    type: 'remove',
+    entry: DataEntry.fromKeyValuePair(key, value)
+  });
 };
