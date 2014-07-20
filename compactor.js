@@ -10,12 +10,12 @@ var KeyDirEntry = require('./keydir_entry');
 
 var headerOffsets = constants.headerOffsets;
 var sizes = constants.sizes;
-var writeCheck = constants.writeCheck;
 
 var Compactor = module.exports = function (db) {
   this.db = db;
   this.activeMerge = null;
   this.delKeyDir = null;
+  this.bytesToBeWritten = 0;
 }
 
 /*
@@ -88,6 +88,17 @@ Compactor.prototype.compact = function (cb) {
     });
   });
 }
+
+Compactor.prototype._wrapWriteFileSync = function(oldFile) {
+  var file = DataFile.createSync(this.db.dirname);
+
+  this.activeMerge = file;
+  this.db.readableFiles.push(file);
+  oldFile.closeForWritingSync();
+  this.bytesToBeWritten = 0;
+
+  return file;
+};
 
 Compactor.prototype._unlink = function(filenames, index, cb) {
   var self = this;
@@ -201,78 +212,77 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
   return true;
 };
 
+Compactor.prototype._getActiveMerge = function (bytesToBeWritten) {
+  var file;
+
+  if (this.bytesToBeWritten + bytesToBeWritten >= this.db.maxFileSize)
+    file = this._wrapWriteFileSync(this.activeMerge);
+  else
+    file = this.activeMerge
+
+  this.bytesToBeWritten += bytesToBeWritten;
+  return file;
+}
+
 Compactor.prototype._innerMergeWrite = function(dataEntry, cb) {
-  var file = this.activeMerge;
+  var that = this;
   var buf = dataEntry.buffer;
-  this.db.bytesToBeWritten += buf.length;
 
-  var that = this;
+  var file = this._getActiveMerge(buf.length);
 
-  var next = function(cb) { cb(null, file); };
-  var check = this.db._checkWrite();
-  if (check === writeCheck.wrap) {
-    next = function(cb) {
-      var newFile = that.db._wrapWriteFileSync(file);
-      cb(null, newFile);
-    };
-  }
+  /**
+   * [crc][timestamp][keysz][valuesz][key][value]
+   */
+  var key = dataEntry.key;
+  var value = dataEntry.value;
+  var lineBuffer = dataEntry.buffer;
 
-  var that = this;
-  next(function(err, file) {
-    /**
-     * [crc][timestamp][keysz][valuesz][key][value]
-     */
-    var key = dataEntry.key;
-    var value = dataEntry.value;
-    var lineBuffer = dataEntry.buffer;
+  file.write(lineBuffer, function(err) {
+    if (err) {
+      if (cb) cb(err);
+      return;
+    }
 
-    file.write(lineBuffer, function(err) {
+    var oldOffset = file.offset;
+    file.offset += lineBuffer.length;
+
+    var totalSz = key.length + value.length + sizes.header;
+
+    var hintBufs = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
+
+    //timestamp
+    lineBuffer.copy(hintBufs, 0, headerOffsets.timestamp, headerOffsets.timestamp + sizes.timestamp);
+    //keysize
+    lineBuffer.copy(hintBufs, sizes.timestamp, headerOffsets.keysize, headerOffsets.keysize + sizes.keysize);
+    //total size
+    hintBufs.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
+    //offset
+    hintBufs.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
+    //key
+    key.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
+
+    file.writeHintFile(hintBufs, function(err) {
       if (err) {
         if (cb) cb(err);
         return;
       }
+      file.hintCrc = crc32(hintBufs, file.hintCrc);
+      file.hintOffset += hintBufs.length;
 
-      var oldOffset = file.offset;
-      file.offset += lineBuffer.length;
+      var entry = new KeyDirEntry();
+      entry.fileId = file.timestamp;
+      entry.valueSize = value.length;
+      entry.valuePosition = oldOffset + sizes.header + key.length;
+      entry.timestamp = dataEntry.timestamp;
 
-      var totalSz = key.length + value.length + sizes.header;
-
-      var hintBufs = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
-
-      //timestamp
-      lineBuffer.copy(hintBufs, 0, headerOffsets.timestamp, headerOffsets.timestamp + sizes.timestamp);
-      //keysize
-      lineBuffer.copy(hintBufs, sizes.timestamp, headerOffsets.keysize, headerOffsets.keysize + sizes.keysize);
-      //total size
-      hintBufs.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
-      //offset
-      hintBufs.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
-      //key
-      key.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
-
-      file.writeHintFile(hintBufs, function(err) {
+      fs.fsync(file.fd, function(err) {
         if (err) {
-          if (cb) cb(err);
-          return;
+          if (cb) return cb(err);
         }
-        file.hintCrc = crc32(hintBufs, file.hintCrc);
-        file.hintOffset += hintBufs.length;
 
-        var entry = new KeyDirEntry();
-        entry.fileId = file.timestamp;
-        entry.valueSize = value.length;
-        entry.valuePosition = oldOffset + sizes.header + key.length;
-        entry.timestamp = dataEntry.timestamp;
+        that.db.keydir[key] = entry;
 
-        fs.fsync(file.fd, function(err) {
-          if (err) {
-            if (cb) return cb(err);
-          }
-
-          that.db.keydir[key] = entry;
-
-          if (cb) cb();
-        });
+        if (cb) cb();
       });
     });
   });
