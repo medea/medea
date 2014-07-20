@@ -109,7 +109,8 @@ describe('Medea#compact', function() {
 
   describe('Write large amount of data', function () {
     before(setup);
-    var max = 20;
+    var max = 100,
+      bufferLength = 100;
 
     before(function (done) {
       var put = function(index) {
@@ -117,7 +118,7 @@ describe('Medea#compact', function() {
           return done();
         }
 
-        var buffer = new Buffer(50);
+        var buffer = new Buffer(bufferLength);
 
         buffer.fill(index);
 
@@ -145,7 +146,7 @@ describe('Medea#compact', function() {
         if (index === max) {
           return done();
         }
-        var buffer = new Buffer(50);
+        var buffer = new Buffer(bufferLength);
         buffer.fill(index);
 
         db.get(buffer, function (err, value) {

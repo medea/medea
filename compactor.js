@@ -106,45 +106,59 @@ Compactor.prototype._compactFile = function(files, index, cb) {
   var self = this;
   var file = files[index];
   var parser = new DataFileParser(file);
+  var entries = [];
   this.delKeyDir = [];
+  var handleEntry = function (cb) {
+    if (entries.length === 0)
+      return cb();
+
+    var entry = entries.shift();
+    var outOfDate = self._outOfDate([self.db.keydir, self.delKeyDir], false, entry);
+    if (outOfDate) {
+       // delete self.keydir[entry.key];
+       return handleEntry(cb);
+    }
+
+    if (!utils.isTombstone(entry.value)) {
+      var newEntry = new KeyDirEntry();
+      newEntry.valuePosition = entry.valuePosition;
+      newEntry.valueSize = entry.valueSize;
+      newEntry.fileId = entry.fileId;
+      newEntry.timestamp = entry.timestamp;
+
+      self.delKeyDir[entry.key] = newEntry;
+
+      delete self.db.keydir[entry.key];
+      self._innerMergeWrite(entry, function () {
+        handleEntry(cb);
+      });
+    } else {
+      if (self.delKeyDir[entry.key]) {
+        delete self.delKeyDir[entry.key];
+      }
+
+      self._innerMergeWrite(entry, function () {
+        handleEntry(cb);
+      });
+    }
+  }
 
   parser.on('error', function(err) {
     cb(err);
   });
 
   parser.on('entry', function(entry) {
-    var outOfDate = self._outOfDate([self.db.keydir, self.delKeyDir], false, entry);
-    if (outOfDate) {
-      // delete self.keydir[entry.key];
-      return;
-    }
-
-   if (!utils.isTombstone(entry.value)) {
-     var newEntry = new KeyDirEntry();
-     newEntry.valuePosition = entry.valuePosition;
-     newEntry.valueSize = entry.valueSize;
-     newEntry.fileId = entry.fileId;
-     newEntry.timestamp = entry.timestamp;
-
-     self.delKeyDir[entry.key] = newEntry;
-
-     delete self.db.keydir[entry.key];
-     self._innerMergeWrite(entry);
-   } else {
-     if (self.delKeyDir[entry.key]) {
-       delete self.delKeyDir[entry.key];
-     }
-
-     self._innerMergeWrite(entry);
-   } 
+    entries.push(entry);
   });
 
   parser.on('end', function() {
-    if (files.length === index + 1) {
-      cb(null);
-    } else {
-      self._compactFile(files, ++index, cb);
-    }
+    handleEntry(function () {
+      if (files.length === index + 1) {
+        cb(null);
+      } else {
+        self._compactFile(files, ++index, cb);
+      }
+    })
   });
 
   parser.parse(cb);
@@ -187,7 +201,7 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
   return true;
 };
 
-Compactor.prototype._innerMergeWrite = function(dataEntry, outfile, cb) {
+Compactor.prototype._innerMergeWrite = function(dataEntry, cb) {
   var file = this.activeMerge;
   var buf = dataEntry.buffer;
   this.db.bytesToBeWritten += buf.length;
