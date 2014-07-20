@@ -212,8 +212,8 @@ Compactor.prototype._innerMergeWrite = function(dataEntry, cb) {
   var check = this.db._checkWrite();
   if (check === writeCheck.wrap) {
     next = function(cb) {
-      var file = that.db._wrapWriteFileSync(file);
-      cb(null, file);
+      var newFile = that.db._wrapWriteFileSync(file);
+      cb(null, newFile);
     };
   }
 

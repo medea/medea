@@ -490,7 +490,6 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
   var file = DataFile.createSync(this.dirname);
 
   if (isActive) {
-    this.isWrapping = true;
     this.writeLock.writeActiveFileSync(this.dirname, file);
     this.active = file;
     this.readableFiles.push(file);
@@ -498,8 +497,9 @@ Medea.prototype._wrapWriteFileSync = function(oldFile) {
     this.bytesToBeWritten = 0;
   } else {
     this.compactor.activeMerge = file;
+    this.readableFiles.push(file);
     oldFile.closeForWritingSync();
-    this.bytesToBeWritten = 0;
+    this.compactor.bytesToBeWritten = 0;
   }
 
   return file;

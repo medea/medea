@@ -1,4 +1,5 @@
 var assert = require('assert');
+var fs = require('fs');
 var Medea = require('../');
 
 var directory = __dirname + '/tmp/medea_test';
@@ -55,6 +56,15 @@ describe('Medea#compact', function() {
       test(0);
     });
 
+    it('obeys maxFileSize', function () {
+      fs.readdirSync(directory).forEach(function (filename) {
+        filename = directory + '/' + filename;
+
+        var stat = fs.statSync(filename)
+        assert(stat.size < db.maxFileSize);
+      });
+    });
+
     after(shutdown);
   });
 
@@ -102,6 +112,15 @@ describe('Medea#compact', function() {
         });
       }
       test(0);
+    });
+
+    it('obeys maxFileSize', function () {
+      fs.readdirSync(directory).forEach(function (filename) {
+        filename = directory + '/' + filename;
+
+        var stat = fs.statSync(filename)
+        assert(stat.size < db.maxFileSize);
+      });
     });
 
     after(shutdown);
@@ -156,6 +175,15 @@ describe('Medea#compact', function() {
         });
       }
       get(0);
+    });
+
+    it('obeys maxFileSize', function () {
+      fs.readdirSync(directory).forEach(function (filename) {
+        filename = directory + '/' + filename;
+
+        var stat = fs.statSync(filename)
+        assert(stat.size < db.maxFileSize);
+      });
     });
 
     after(shutdown);
