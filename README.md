@@ -15,13 +15,17 @@ A persistent key-value storage library.
 - [Install](#install)
 - [Usage](#usage)
   - [db.open([directory], callback)](#dbopendirectory-callback)
-  - [db.get(key, callback)](#dbgetkey-callback)
+  - [db.get(key, [snapshot], callback)](#dbgetkey-snapshot-callback)
   - [db.put(key, value, callback)](#dbputkey-value-callback)
   - [db.remove(key, callback)](#dbremovekey-callback)
+  - [db.createSnapshot()](#dbcreatesnapshot)
+  - [db.createBatch()](#dbcreatebatch)
+  - [db.write(batch, callback)](#dbwritebatch-callback)
   - [db.sync(callback)](#dbsynccallback)
   - [db.close(callback)](#dbclosecallback)
   - [db.listKeys(callback)](#dblistkeyscallback)
   - [db.mapReduce(options, callback)](#dbmapreduceoptions-callback)
+  - [db.compact(callback)](#dbcompactcallback)
 - [How It Works](#how-it-works)
   - [Keydir](#keydir)
   - [Data Files](#data-files)
@@ -63,11 +67,13 @@ Opens a Medea key-value store.
 
 `callback`: Takes one error parameter.
 
-### db.get(key, callback)
+### db.get(key, [snapshot], callback)
 
 Returns the value associated with the given key.
 
 `key`: identifier to retrieve the value
+
+`snapshot`: a snapshot on which to query.  optional.
 
 `callback`: has the signature `function (err, value)` where `value` is the returned value.
 
@@ -88,6 +94,51 @@ Removes an entry from Medea.
 `key`: identifier for the item to remove
 
 `callback`: Takes one error parameter.
+
+### db.createSnapshot()
+
+Creates a transient snapshot of the data.  Works with [db.get(key, [snapshot], callback)](#dbgetkey-snapshot-callback).
+
+Returns a Snapshot object.
+
+Example:
+
+```js
+db.put('hello', 'world', function(err) {
+  var snapshot = db.createSnapshot();
+  db.put('hello', 'void', function(err) {
+    db.get('hello', snapshot, function(err, val) {
+      assert(val.toString, 'world');
+    });
+  });
+});
+```
+
+### db.createBatch()
+
+Creates a batch object for atomic writes.  Works with [db.write(batch, callback)](#dbwritebatch-callback).
+
+Returns a WriteBatch object.
+
+### db.write(batch, callback)
+
+Commits `put` and `remove` operations atomically.
+
+`batch`: a WriteBatch object created with [db.createBatch()](#dbcreatebatch).
+
+`callback`: Takes one error parameter.
+
+Example:
+
+```js
+var batch = db.createBatch();
+batch.put('key1', 'value1');
+batch.remove('key2');
+
+db.write(batch, function(err) {
+  console.log('batch written atomically');
+});
+```
 
 ### db.sync(callback)
 
@@ -110,6 +161,12 @@ Experimental.
 Ad-hoc map-reduce queries over the key-value pairs.  The query results are not indexed.  A more robust map-reduce implementation will be provided in the near future.
 
 See `examples/map_reduce.js` for an example. <!--_-->
+
+### db.compact(callback)
+
+Runs a compaction process on the database files.  Reduces size of data on disk.  Deletes old log entries.
+
+`callback`: A function that takes an error parameter.
 
 ## How it Works
 
@@ -143,9 +200,7 @@ Contains a process ID and the active file path.
 
 Currently, multiple processes cannot access the same data directory.  Run one process per directory.  A workaround has been developed for servers using Node's `cluster` module.  Check out [medea-clusterify](https://github.com/argo/medea-clusterify) to see how it works!
 
-Repeated use leads to fragmentation and empty files. A merge process needs to be run for cleanup, but that piece has yet to be developed.
-
-This software is still in an early, experimental phase.  Feedback, issues, and pull requests are welcome. :)
+Repeated use leads to fragmentation and empty files. The compaction process needs to be run for cleanup.  See: [db.compact(callback)](#dbcompactcallback).
 
 ## License
 
