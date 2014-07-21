@@ -376,7 +376,8 @@ Medea.prototype.write = function(batch, options, cb) {
   var batchBuffers = [];
   var batchSize = 0;
 
-  batch.entries.forEach(function(entry) {
+  batch.operations.forEach(function(operation) {
+    var entry = operation.entry;
     var buffer = DataBuffer.fromKeyValuePair(entry.key, entry.value);
     batchBuffers.push(buffer);
     batchSize += buffer.length;
@@ -468,8 +469,14 @@ Medea.prototype.write = function(batch, options, cb) {
         file.hintCrc = newHintCrc;
         file.hintOffset += hintBufsSize;
 
-        Object.keys(keydirDelta).forEach(function(key) {
-          that.keydir[key] = keydirDelta[key];
+        batch.operations.forEach(function (operation) {
+          var key = operation.entry.key.toString();
+
+          if (operation.type === 'remove') {
+            delete that.keydir[key];
+          } else {
+            that.keydir[key] = keydirDelta[key];
+          }
         });
 
         if (cb) cb();

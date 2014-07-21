@@ -84,6 +84,7 @@ describe('Medea', function() {
         var batch = db.createBatch();
         batch.remove('hello');
         db.write(batch, function() {
+          assert.equal(db.keydir.hello, undefined);
           db.get('hello', function(err, val) {
             assert(!val);
             done();
