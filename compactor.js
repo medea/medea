@@ -113,46 +113,53 @@ Compactor.prototype._unlink = function(filenames, index, cb) {
   });
 }
 
+Compactor.prototype._handleEntry = function (entries, index, cb) {
+  var self = this;
+
+  if (index === entries.length) {
+    return cb();
+  }
+
+  var entry = entries[index];
+  var outOfDate = self._outOfDate([self.db.keydir, self.delKeyDir], false, entry);
+  if (outOfDate) {
+     // Use setImmediate to avoid "Maximum call stack size exceeded" if we're running
+     // compaction on multiple outdated entries
+     return setImmediate(function () {
+      self._handleEntry(entries, ++index, cb);
+    });
+  }
+
+  if (!utils.isTombstone(entry.value)) {
+    var newEntry = new KeyDirEntry();
+    newEntry.valuePosition = entry.valuePosition;
+    newEntry.valueSize = entry.valueSize;
+    newEntry.fileId = entry.fileId;
+    newEntry.timestamp = entry.timestamp;
+
+    self.delKeyDir[entry.key] = newEntry;
+
+    delete self.db.keydir[entry.key];
+    self._innerMergeWrite(entry, function () {
+      self._handleEntry(entries, ++index, cb);
+    });
+  } else {
+    if (self.delKeyDir[entry.key]) {
+      delete self.delKeyDir[entry.key];
+    }
+
+    self._innerMergeWrite(entry, function () {
+      self._handleEntry(entries, ++index, cb);
+    });
+  }
+};
+
 Compactor.prototype._compactFile = function(files, index, cb) {
   var self = this;
   var file = files[index];
   var parser = new DataFileParser(file);
   var entries = [];
   this.delKeyDir = [];
-  var handleEntry = function (cb) {
-    if (entries.length === 0)
-      return cb();
-
-    var entry = entries.shift();
-    var outOfDate = self._outOfDate([self.db.keydir, self.delKeyDir], false, entry);
-    if (outOfDate) {
-       // delete self.keydir[entry.key];
-       return handleEntry(cb);
-    }
-
-    if (!utils.isTombstone(entry.value)) {
-      var newEntry = new KeyDirEntry();
-      newEntry.valuePosition = entry.valuePosition;
-      newEntry.valueSize = entry.valueSize;
-      newEntry.fileId = entry.fileId;
-      newEntry.timestamp = entry.timestamp;
-
-      self.delKeyDir[entry.key] = newEntry;
-
-      delete self.db.keydir[entry.key];
-      self._innerMergeWrite(entry, function () {
-        handleEntry(cb);
-      });
-    } else {
-      if (self.delKeyDir[entry.key]) {
-        delete self.delKeyDir[entry.key];
-      }
-
-      self._innerMergeWrite(entry, function () {
-        handleEntry(cb);
-      });
-    }
-  }
 
   parser.on('error', function(err) {
     cb(err);
@@ -163,7 +170,7 @@ Compactor.prototype._compactFile = function(files, index, cb) {
   });
 
   parser.on('end', function() {
-    handleEntry(function () {
+    self._handleEntry(entries, 0, function () {
       if (files.length === index + 1) {
         cb(null);
       } else {

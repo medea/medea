@@ -9,10 +9,10 @@ var setup = function (done) {
     db = new Medea({ maxFileSize: 512 });
     db.open(directory, done);
   });
-}
+};
 var shutdown = function (done) {
   db.close(done);
-}
+};
 
 describe('Medea#compact', function() {
 
@@ -171,6 +171,87 @@ describe('Medea#compact', function() {
         db.get(buffer, function (err, value) {
           if (err) return done(err);
           assert.deepEqual(value, buffer);
+          get(++index);
+        });
+      }
+      get(0);
+    });
+
+    it('obeys maxFileSize', function () {
+      fs.readdirSync(directory).forEach(function (filename) {
+        filename = directory + '/' + filename;
+
+        var stat = fs.statSync(filename)
+        assert(stat.size < db.maxFileSize);
+      });
+    });
+
+    after(shutdown);
+  });
+
+  describe('write many keys', function () {
+    this.timeout(10000);
+
+    before(function (done) {
+      require('rimraf')(directory, function () {
+        db = new Medea({
+          maxFileSize: 1024 * 1024
+        });
+        db.open(directory, done);
+      });
+    });
+
+    var max = 25000;
+
+    before(function (done) {
+      var put = function(index) {
+        if (index === max) {
+          return done();
+        }
+
+        db.put(index.toString(), index.toString(), function(err) {
+          if (err) return done(err);
+          put(++index);
+        });
+      }
+
+      put(0);
+    });
+
+    before(function (done) {
+      var put = function(index) {
+        if (index === max) {
+          return done();
+        }
+
+        db.put(index.toString(), index.toString(), function(err) {
+          if (err) return done(err);
+          put(++index);
+        });
+      }
+
+      put(0);
+    });
+
+    it('successfully compacts', function (done) {
+      db.compact(function (err) {
+        if (err) return done(err);
+        db.compact(function (err) {
+          if (err) return done(err);
+          done()
+        });
+      });
+    });
+
+    it('successfully saves data', function (done) {
+      var get = function (index) {
+        if (index === max) {
+          return done();
+        }
+
+        db.get(index.toString(), function (err, value) {
+          if (err) return done(err);
+          assert.deepEqual(value.toString(), index.toString());
           get(++index);
         });
       }
