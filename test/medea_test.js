@@ -19,6 +19,16 @@ describe('Medea', function() {
     assert(db.maxFileSize > 0);
   });
 
+  describe('initialize', function () {
+    it('can be created as a factory', function () {
+      assert(medea() instanceof medea);
+    });
+
+    it('successfully created as a Class', function () {
+      assert((new medea()) instanceof medea);
+    })
+  });
+
   describe('#put', function() {
     it('successfully stores a String value', function(done) {
       db.put('hello', 'world', function(err) {
