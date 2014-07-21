@@ -108,7 +108,7 @@ db.put('hello', 'world', function(err) {
   var snapshot = db.createSnapshot();
   db.put('hello', 'void', function(err) {
     db.get('hello', snapshot, function(err, val) {
-      assert(val.toString, 'world');
+      assert.equal(val.toString, 'world');
     });
   });
 });
