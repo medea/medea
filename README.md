@@ -14,14 +14,14 @@ A persistent key-value storage library.
 - [Example](#example)
 - [Install](#install)
 - [Usage](#usage)
-  - [medea.open([directory], callback)](#medeaopendirectory-callback)
-  - [medea.get(key, callback)](#medeagetkey-callback)
-  - [medea.put(key, value, callback)](#medeaputkey-value-callback)
-  - [medea.remove(key, callback)](#medearemovekey-callback)
-  - [medea.sync(callback)](#medeasynccallback)
-  - [medea.close(callback)](#medeaclosecallback)
-  - [medea.listKeys(callback)](#medealistkeyscallback)
-  - [medea.mapReduce(options, callback)](#medeamapreduceoptions-callback)
+  - [db.open([directory], callback)](#dbopendirectory-callback)
+  - [db.get(key, callback)](#dbgetkey-callback)
+  - [db.put(key, value, callback)](#dbputkey-value-callback)
+  - [db.remove(key, callback)](#dbremovekey-callback)
+  - [db.sync(callback)](#dbsynccallback)
+  - [db.close(callback)](#dbclosecallback)
+  - [db.listKeys(callback)](#dblistkeyscallback)
+  - [db.mapReduce(options, callback)](#dbmapreduceoptions-callback)
 - [How It Works](#how-it-works)
   - [Keydir](#keydir)
   - [Data Files](#data-files)
@@ -33,15 +33,15 @@ A persistent key-value storage library.
 ## Example
 
 ```javascript
-var Medea = require('medea');
+var medea = require('medea');
 
-var medea = new Medea();
+var db = medea();
 
-medea.open(function(err) {
-  medea.put('hello', 'world!', function(err) {
-    medea.get('hello', function(err, val) {
+db.open(function(err) {
+  db.put('hello', 'world!', function(err) {
+    db.get('hello', function(err, val) {
       console.log(val.toString());
-      medea.close();
+      db.close();
     });
   });
 });
@@ -55,7 +55,7 @@ $ npm install medea
 
 ## Usage
 
-### medea.open([directory], callback)
+### db.open([directory], callback)
 
 Opens a Medea key-value store.
 
@@ -63,7 +63,7 @@ Opens a Medea key-value store.
 
 `callback`: Takes one error parameter.
 
-### medea.get(key, callback)
+### db.get(key, callback)
 
 Returns the value associated with the given key.
 
@@ -71,7 +71,7 @@ Returns the value associated with the given key.
 
 `callback`: has the signature `function (err, value)` where `value` is the returned value.
 
-### medea.put(key, value, callback) 
+### db.put(key, value, callback) 
 
 Stores a value in Medea.
 
@@ -81,7 +81,7 @@ Stores a value in Medea.
 
 `callback`: function that takes an error parameter
 
-### medea.remove(key, callback)
+### db.remove(key, callback)
 
 Removes an entry from Medea.
 
@@ -89,21 +89,21 @@ Removes an entry from Medea.
 
 `callback`: Takes one error parameter.
 
-### medea.sync(callback)
+### db.sync(callback)
 
 Performs an fsync operation on the active data and hint files.
 
-### medea.close(callback)
+### db.close(callback)
 
 Closes Medea.
 
-### medea.listKeys(callback)
+### db.listKeys(callback)
 
 Returns an array of keys from the key-value store.
 
 `callback`: A function that takes two parameters: an error and the array of keys.
 
-### medea.mapReduce(options, callback)
+### db.mapReduce(options, callback)
 
 Experimental.
 
