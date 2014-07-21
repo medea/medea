@@ -1,5 +1,4 @@
 var assert = require('assert');
-var crypto = require('crypto');
 var Medea = require('../');
 
 var directory = __dirname + '/tmp/medea_test';
@@ -262,69 +261,6 @@ describe('Medea', function() {
   });
 
   after(function(done) {
-    db.close(done);
-  });
-});
-
-describe('Multiple files and compact', function () {
-  before(function (done) {
-    require('rimraf')(directory, function () {
-      db = new Medea({ maxFileSize: 100 });
-      db.open(directory, done)
-    });
-  });
-
-  it('successfully overwriting same key', function (done) {
-    db.put('foo1', new Buffer(100), function () {
-      db.put('foo1', new Buffer(100), function () {
-        db.put('foo1', new Buffer(100), function () {
-          db.compact(function (err) {
-            if (err) return done(err)
-            db.compact(function (err) {
-              if (err) return done(err)
-
-              db.get('foo1', function (err, value) {
-                assert(!!value);
-                done()
-              })
-            });
-          });
-        });
-      });
-    });
-  });
-
-  it('successfully writing different key', function (done) {
-    var buffer1 = crypto.randomBytes(100),
-      buffer2 = crypto.randomBytes(100),
-      buffer3 = crypto.randomBytes(100);
-
-    db.put('foo1', buffer1, function () {
-      db.put('foo2', buffer2, function () {
-        db.put('foo3', buffer3, function () {
-          db.compact(function (err) {
-            if (err) return done(err)
-            db.compact(function (err) {
-              if (err) return done(err)
-              db.get('foo1', function (err, value) {
-                assert.deepEqual(value, buffer1);
-                db.get('foo2', function (err, value) {
-                  assert.deepEqual(value, buffer2);
-                  db.get('foo3', function (err, value) {
-                    assert.deepEqual(value, buffer3);
-
-                    done()
-                  });
-                });
-              })
-            });
-          });
-        });
-      });
-    });
-  });
-
-  after(function (done) {
     db.close(done);
   });
 });

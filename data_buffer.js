@@ -3,7 +3,7 @@ var constants = require('./constants');
 var headerOffsets = constants.headerOffsets;
 var sizes = constants.sizes;
 
-exports.fromKeyValuePair = function(key, value) {
+exports.fromKeyValuePair = function(key, value, ts) {
   if (!(key instanceof Buffer)) {
     key = new Buffer(key.toString());
   }
@@ -11,8 +11,6 @@ exports.fromKeyValuePair = function(key, value) {
   if (!(value instanceof Buffer) && typeof value !== 'string') {
     value = new Buffer(value.toString());
   }
-
-  var ts = Date.now();
 
   /**
    * [crc][timestamp][keysz][valuesz][key][value]
