@@ -472,11 +472,12 @@ Medea.prototype.write = function(batch, options, cb) {
         batch.operations.forEach(function (operation) {
           var key = operation.entry.key.toString();
 
-          if (operation.type === 'remove')
+          if (operation.type === 'remove') {
             delete that.keydir[key];
-          else
+          } else {
             that.keydir[key] = keydirDelta[key];
-        })
+          }
+        });
 
         if (cb) cb();
       });
