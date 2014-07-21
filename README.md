@@ -7,6 +7,8 @@ A persistent key-value storage library.
 * Influenced by Basho's [Bitcask](https://github.com/basho/bitcask) key-value store.
 * Values can be any string or `Buffer`.
 
+[![Build Status](https://api.travis-ci.org/argo/medea.png)](https://api.travis-ci.org/argo/medea.png)
+
 ## Contents
 
 - [Example](#example)
