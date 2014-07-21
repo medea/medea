@@ -28,7 +28,7 @@ var writeCheck = constants.writeCheck;
   this.newestTimestamp = null;
 };*/
 
-var Medea = module.exports = function(options) {
+var Medea = function(options) {
   this.active = null;
   this.keydir = {};
 
@@ -634,4 +634,8 @@ Medea.prototype.sync = function(file, cb) {
 
 Medea.prototype.compact = function(cb) {
   this.compactor.compact(cb);
+};
+
+module.exports = function(options) {
+  return new Medea(options);
 };

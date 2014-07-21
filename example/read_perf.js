@@ -1,10 +1,10 @@
-var Medea = require('../');
-var medea = new Medea({ readOnly: true });
+var medea = require('../');
+var db = medea({ readOnly: true });
 
 var num = 130000;
 var iterations = 1;
 
-medea.open(function() {
+db.open(function() {
   var ids = new Array(num);
   for (var i = 0, len = ids.length; i < len; i++) {
     ids[i] = Math.floor(Math.random()*(num));
@@ -16,7 +16,7 @@ medea.open(function() {
   var errors = [];
   for (var j = 0; j < iterations; j++) {
     for (var i = 0, len = ids.length; i < len; i++) {
-      medea.get('hello' + ids[i], function(err, val) {
+      db.get('hello' + ids[i], function(err, val) {
         if (err) {
           errors.push(err);
           console.log(err);
@@ -30,7 +30,7 @@ medea.open(function() {
           console.log('Completed in ' + time + 's');
           console.log('Read errors:', errors.length);
           console.log('Reads at ' + Math.round(((num * iterations)/ time) * 100) / 100 + ' values per second');
-          medea.close();
+          db.close();
         }
       });
     }

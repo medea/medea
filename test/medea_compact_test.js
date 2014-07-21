@@ -1,12 +1,12 @@
 var assert = require('assert');
 var fs = require('fs');
-var Medea = require('../');
+var medea = require('../');
 
 var directory = __dirname + '/tmp/medea_compact_test';
 var db;
 var setup = function (done) {
   require('rimraf')(directory, function () {
-    db = new Medea({ maxFileSize: 512 });
+    db = medea({ maxFileSize: 512 });
     db.open(directory, done);
   });
 };
@@ -194,7 +194,7 @@ describe('Medea#compact', function() {
 
     before(function (done) {
       require('rimraf')(directory, function () {
-        db = new Medea({
+        db = medea({
           maxFileSize: 1024 * 1024
         });
         db.open(directory, done);

@@ -1,5 +1,5 @@
 var assert = require('assert');
-var Medea = require('../');
+var medea = require('../');
 
 var directory = __dirname + '/tmp/medea_test';
 var db;
@@ -7,7 +7,7 @@ var db;
 describe('Medea', function() {
   before(function(done) {
     require('rimraf')(directory, function () {
-      db = new Medea({ maxFileSize: 1024*1024 });
+      db = medea({ maxFileSize: 1024*1024 });
       db.open(directory, function(err) {
         done();
       });
@@ -15,7 +15,7 @@ describe('Medea', function() {
   });
 
   it('has a max file size', function() {
-    var db = new Medea();
+    var db = medea();
     assert(db.maxFileSize > 0);
   });
 
@@ -267,7 +267,7 @@ describe('Medea', function() {
 
 describe('Medea#open() and then directly #close()', function () {
   it('should not error', function (done) {
-    db = new Medea({});
+    db = medea({});
     db.open(directory, function(err) {
       db.close(done)
     });

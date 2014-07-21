@@ -1,7 +1,7 @@
-var Medea = require('../');
-var medea = new Medea();
+var medea = require('../');
+var db = medea();
 
-medea.open(function() {
+db.open(function() {
   var map = function(key, value, emit) {
     emit('value', Number(value.toString().replace('valz', '')));
   };
@@ -21,7 +21,7 @@ medea.open(function() {
     reduce: reduce
   };
 
-  medea.mapReduce(options, function(values) {
+  db.mapReduce(options, function(values) {
     console.log(values[0]);
   });
 });

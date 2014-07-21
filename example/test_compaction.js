@@ -1,6 +1,6 @@
-var Medea = require('../');
+var medea = require('../');
 
-var db = new Medea();
+var db = medea();
 
 db.open(function() {
   db.compact(function() {

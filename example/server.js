@@ -1,12 +1,12 @@
 var argo = require('argo');
-var Medea = require('../');
+var medea = require('../');
 
-var medea = new Medea();
+var db = medea();
 
 var server = argo()
-  .get('/medea', function(handle) {
+  .get('/db', function(handle) {
     handle('request', function(env, next) {
-      var key = env.request.url.substr('/medea/'.length);
+      var key = env.request.url.substr('/db/'.length);
 
       if (!key.length) {
         env.response.statusCode = 404;
@@ -14,7 +14,7 @@ var server = argo()
         return;
       }
       
-      medea.get(key, function(err, val) {
+      db.get(key, function(err, val) {
         if (err) {
           console.log(err);
         }
@@ -29,12 +29,12 @@ var server = argo()
       });
     });
   })
-  .put('/medea', function(handle) {
+  .put('/db', function(handle) {
     handle('request', function(env, next) {
-      var key = env.request.url.substr('/medea/'.length);
+      var key = env.request.url.substr('/db/'.length);
 
       if (key === 'compact') {
-        medea.compact();
+        db.compact();
         env.response.statusCode = 202;
         next(env);
       }
@@ -46,16 +46,16 @@ var server = argo()
       }
 
       env.request.getBody(function(err, body) {
-        medea.put(key, body, function() {
+        db.put(key, body, function() {
           env.response.statusCode = 201;
           next(env);
         });
       });
     });
   })
-  .del('/medea', function(handle) {
+  .del('/db', function(handle) {
     handle('request', function(env, next) {
-      var key = env.request.url.substr('/medea/'.length);
+      var key = env.request.url.substr('/db/'.length);
 
       if (!key.length) {
         env.response.statusCode = 404;
@@ -63,7 +63,7 @@ var server = argo()
         return;
       }
 
-      medea.remove(key, function() {
+      db.remove(key, function() {
         env.statusCode = 200;
         next(env);
       });
@@ -71,15 +71,15 @@ var server = argo()
     });
   });
 
-medea.open(function() {
+db.open(function() {
   var port = process.env.PORT || 3000;
   server.listen(port);
   console.log('Listening on http://localhost:' + port);
-  console.log('keydir length:', Object.keys(medea.keydir).length);
+  console.log('keydir length:', Object.keys(db.keydir).length);
 });
 
 ['SIGTERM','SIGINT'].forEach(function(ev) {
   process.on(ev, function() {
-    medea.close(function() { console.log('closed medea'); process.exit();});
+    db.close(function() { console.log('closed db'); process.exit();});
   });
 });
