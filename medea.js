@@ -11,6 +11,7 @@ var DataFile = require('./data_file');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var Lock = require('./lock');
+var MapReduce = require('./map_reduce');
 var WriteBatch = require('./write_batch');
 var Snapshot = require('./snapshot');
 
@@ -539,81 +540,9 @@ Medea.prototype.listKeys = function(cb) {
   if (cb) cb(null, Object.keys(this.keydir));
 };
 
-var MappedItem = function() {
-  this.recordKey = null;
-  this.key = null;
-  this.value = null;
-};
-
 Medea.prototype.createSnapshot = function () {
   return new Snapshot(this);
 }
-
-Medea.prototype.mapReduce = function(options, cb) {
-  var that = this;
-
-  var map = options.map;
-  var reduce = options.reduce;
-  var group = options.hasOwnProperty('group') ? options.group : false;
-  var startKey = options.startKey;
-  var endKey = options.endKey;
-
-  var mapped = [];
-  var mapper = function(recordKey) {
-    return function(key, val) {
-      var item = new MappedItem();
-      item.recordKey = recordKey;
-      item.key = key;
-      item.value = val;
-      mapped.push(item);
-    }
-  };
-
-  that.listKeys(function(err, keys) {
-    var len = keys.length;
-
-    var i = 0;
-    var acc;
-
-    var iterator = function(keys, i, len, cb1) {
-      if (i < len) {
-        that.get(keys[i], function(val) {
-          map(keys[i], val, mapper(keys[i]));
-          iterator(keys, i+1, len, cb1);
-        });
-      } else {
-        if (!group) {
-          var remapped = {};
-          mapped.forEach(function(item) {
-            if (!remapped[item.key]) {
-              remapped[item.key] = [];
-            }
-
-            remapped[item.key].push(item.value);
-          });
-
-          Object.keys(remapped).forEach(function(key) {
-            if ((!startKey || (item.key >= startKey)) &&
-                (!endKey || item.key <= endKey)) {
-              acc = reduce(key, remapped[key]);
-            }
-          });
-        } else {
-          mapped.forEach(function(item) {
-            if ((!startKey || (item.key >= startKey)) &&
-                (!endKey || item.key <= endKey)) {
-              acc = reduce(item.key, item.value);
-            }
-          });
-        }
-
-        cb1(acc);
-      }
-    };
-
-    iterator(keys, 0, len, cb);
-  });
-};
 
 Medea.prototype.sync = function(file, cb) {
   if (!cb && typeof file === 'function') {
@@ -634,6 +563,11 @@ Medea.prototype.sync = function(file, cb) {
 
 Medea.prototype.compact = function(cb) {
   this.compactor.compact(cb);
+};
+
+Medea.prototype.mapReduce = function(options, cb) {
+  var job = new MapReduce(this, options);
+  job.run(cb);
 };
 
 module.exports = function(options) {
