@@ -15,6 +15,8 @@ var shutdown = function (done) {
 };
 
 describe('Medea#compact', function() {
+  // disable timeout
+  this.timeout(0);
 
   describe('Multiple time overwriting same key', function () {
     before(setup);
@@ -190,8 +192,6 @@ describe('Medea#compact', function() {
   });
 
   describe('write many keys', function () {
-    this.timeout(10000);
-
     before(function (done) {
       require('rimraf')(directory, function () {
         db = medea({
