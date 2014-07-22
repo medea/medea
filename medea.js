@@ -30,6 +30,9 @@ var writeCheck = constants.writeCheck;
 };*/
 
 var Medea = function(options) {
+  if (!(this instanceof Medea))
+    return new Medea(options);
+
   this.active = null;
   this.keydir = {};
 
@@ -565,11 +568,4 @@ Medea.prototype.compact = function(cb) {
   this.compactor.compact(cb);
 };
 
-Medea.prototype.mapReduce = function(options, cb) {
-  var job = new MapReduce(this, options);
-  job.run(cb);
-};
-
-module.exports = function(options) {
-  return new Medea(options);
-};
+module.exports = Medea;
