@@ -499,23 +499,11 @@ Medea.prototype._wrapWriteFileSync = function() {
   return file;
 };
 
-Medea.prototype.get = function(key, snapshot, callback) {
-  if (!callback) {
-    callback = snapshot;
+Medea.prototype.get = function(key, snapshot, cb) {
+  if (!cb) {
+    cb = snapshot;
     snapshot = undefined;
   }
-
-  var that = this;
-
-  var cb = function(err, value) {
-    if (!err) {
-      that.emit('get', key, value, snapshot);
-    }
-
-    if (callback) {
-      callback(err, value);
-    }
-  };
 
   if (snapshot && snapshot.closed)
     return cb(new Error('Snapshot is closed'));
