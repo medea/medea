@@ -172,8 +172,9 @@ describe('Medea', function() {
       batch.put('hello2', 'world2');
       batch.remove('hello');
 
-      db.once('write', function(batch1) {
+      db.once('write', function(batch1, size) {
         assert.deepEqual(batch1, batch);
+        assert(size > 0);
         done();
       });
 
@@ -231,6 +232,17 @@ describe('Medea', function() {
           assert(!err);
           done();
         });
+      });
+    });
+
+    it('emits a compact event', function(done) {
+      db.once('compact', function() {
+        assert(true);
+        done();
+      });
+
+      db.put('beep', 'boop', function(err) {
+        db.compact();
       });
     });
   });

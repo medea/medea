@@ -386,7 +386,7 @@ Medea.prototype.write = function(batch, options, cb) {
   var file = this._getActiveFile(bytesToBeWritten);
   var that = this;
 
-  var lineBuffer = Buffer.concat(batchBuffers, batch.size);
+  var lineBuffer = Buffer.concat(batchBuffers, batchSize);
 
   file.write(lineBuffer, { sync: options.sync }, function(err) {
     if (err) {
@@ -468,7 +468,7 @@ Medea.prototype.write = function(batch, options, cb) {
         }
       })
 
-      that.emit('write', batch);
+      that.emit('write', batch, batchSize);
       if (cb) cb();
     });
   });
@@ -581,7 +581,6 @@ Medea.prototype.sync = function(file, cb) {
     }
 
     fs.fsync(file.hintFd, cb);
-    that.emit('sync');
   });
 };
 
@@ -592,7 +591,9 @@ Medea.prototype.compact = function(callback) {
       that.emit('compact');
     }
 
-    callback(err);
+    if (callback) {
+      callback(err);
+    }
   };
 
   this.compactor.compact(cb);
