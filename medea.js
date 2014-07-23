@@ -349,12 +349,13 @@ Medea.prototype.put = function(k, v, cb) {
 
       that.keydir[k] = entry;
 
+      if (utils.isTombstone(value)) {
+        that.emit('remove', key);
+      } else {
+        that.emit('put', key, value);
+      }
+
       if (cb) {
-        if (utils.isTombstone(value)) {
-          that.emit('remove', key);
-        } else {
-          that.emit('put', key, value);
-        }
         cb();
       }
     });
@@ -580,10 +581,20 @@ Medea.prototype.sync = function(file, cb) {
     }
 
     fs.fsync(file.hintFd, cb);
+    that.emit('sync');
   });
 };
 
-Medea.prototype.compact = function(cb) {
+Medea.prototype.compact = function(callback) {
+  var that = this;
+  var cb = function(err) {
+    if (!err) {
+      that.emit('compact');
+    }
+
+    callback(err);
+  };
+
   this.compactor.compact(cb);
 };
 
