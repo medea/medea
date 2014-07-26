@@ -6,6 +6,8 @@ A persistent key-value storage library.
 * Support for `get`, `put`, and `remove` operations.
 * Influenced by Basho's [Bitcask](https://github.com/basho/bitcask) key-value store.
 * Values can be any string or `Buffer`.
+* Supports atomic batch writes.
+* Allows snapshots for consistent views of data.
 
 [![Build Status](https://api.travis-ci.org/argo/medea.svg?branch=master)](https://travis-ci.org/argo/medea)
 
@@ -201,6 +203,8 @@ Contains a process ID and the active file path.
 Currently, multiple processes cannot access the same data directory.  Run one process per directory.  A workaround has been developed for servers using Node's `cluster` module.  Check out [medea-clusterify](https://github.com/argo/medea-clusterify) to see how it works!
 
 Repeated use leads to fragmentation and empty files. The compaction process needs to be run for cleanup.  See: [db.compact(callback)](#dbcompactcallback).
+
+Medea's design places all keys in memory.  Therefore, the entire key set must fit in memory.  All values are stored on disk.
 
 ## License
 
