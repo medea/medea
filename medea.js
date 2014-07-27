@@ -1,6 +1,9 @@
 var fs = require('fs');
+var EventEmitter = require('events').EventEmitter;
 var crc32 = require('buffer-crc32');
 var timestamp = require('monotonic-timestamp');
+var util = require('util');
+
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -19,15 +22,6 @@ var sizes = constants.sizes;
 var headerOffsets = constants.headerOffsets;
 var tombstone = constants.tombstone;
 var writeCheck = constants.writeCheck;
-
-/*var FileStatus = function() {
-  this.filename = null;
-  this.fragmented = null;
-  this.deadBytes = null;
-  this.totalBytes = null;
-  this.oldestTimestamp = null;
-  this.newestTimestamp = null;
-};*/
 
 var Medea = function(options) {
   if (!(this instanceof Medea))
@@ -68,23 +62,37 @@ var Medea = function(options) {
   this.readableFiles = [];
   this.fileReferences = {};
   this.compactor = new Compactor(this);
-};
 
-Medea.prototype.open = function(dir, options, cb) {
+  EventEmitter.call(this);
+};
+util.inherits(Medea, EventEmitter);
+
+Medea.prototype.open = function(dir, options, callback) {
   if (typeof options === 'function') {
-    cb = options;
+    callback = options;
     options = {};
   }
 
   if (typeof dir === 'function') {
     options = {};
-    cb = dir;
+    callback = dir;
     dir = this.dirname || process.cwd() + '/medea';
   }
 
+  var that = this;
+
+  var cb = function(err) {
+    if (!err) {
+      that.emit('open');
+    }
+
+    if (callback) {
+      callback(err);
+    }
+  };
+
   this.dirname = dir;
 
-  var that = this;
   var scanFiles = function(cb) {
     that._getReadableFiles(function(err, arr) {
       arr.forEach(function(f) {
@@ -143,9 +151,8 @@ Medea.prototype._getReadableFiles = function(cb) {
   var that = this;
   var writingFile = Lock.readActiveFile(this.dirname, 'write', function(err, writeFile) {
     var mergingFile = Lock.readActiveFile(that.dirname, 'merge', function(err, mergeFile) {
-      // TODO: Filter out files marked for deletion by successful merge.
       fileops.listDataFiles(that.dirname, writeFile, mergeFile, function(err, files) {
-        cb(null, files);
+        cb(err, files);
       });
     });
   });
@@ -158,14 +165,8 @@ Medea.prototype._acquire = function(dir, type, cb) {
   var that = this;
   var writeFile = function() {
     Lock.acquire(filename, true, function(err, writeLock) {
-      if (err) {
-        console.log('Error on acquiring write lock.', err);
-      }
       that.writeLock = writeLock;
       that.writeLock.writeActiveFile(that.dirname, null, function(err) {
-        if (err) {
-          console.log('Error on writing active file:', err);
-        }
         cb(null, writeLock);
       });
     });
@@ -251,8 +252,19 @@ Medea.prototype._closeReadableFiles = function(cb) {
   });
 };
 
-Medea.prototype.close = function(cb) {
+Medea.prototype.close = function(callback) {
   var that = this;
+
+  var cb = function(err) {
+    if (!err) {
+      that.emit('close');
+    }
+
+    if (callback) {
+      callback(err);
+    }
+  };
+
   this.active.closeForWriting(function() {
     if (that.active.offset === 0 && that.bytesToBeWritten === 0) {
       fs.unlink(that.active.filename, function(err) {
@@ -337,7 +349,15 @@ Medea.prototype.put = function(k, v, cb) {
 
       that.keydir[k] = entry;
 
-      if (cb) cb();
+      if (utils.isTombstone(value)) {
+        that.emit('remove', key);
+      } else {
+        that.emit('put', key, value);
+      }
+
+      if (cb) {
+        cb();
+      }
     });
   });
 };
@@ -366,7 +386,7 @@ Medea.prototype.write = function(batch, options, cb) {
   var file = this._getActiveFile(bytesToBeWritten);
   var that = this;
 
-  var lineBuffer = Buffer.concat(batchBuffers, batch.size);
+  var lineBuffer = Buffer.concat(batchBuffers, batchSize);
 
   file.write(lineBuffer, { sync: options.sync }, function(err) {
     if (err) {
@@ -448,6 +468,7 @@ Medea.prototype.write = function(batch, options, cb) {
         }
       })
 
+      that.emit('write', batch, batchSize);
       if (cb) cb();
     });
   });
@@ -456,10 +477,11 @@ Medea.prototype.write = function(batch, options, cb) {
 Medea.prototype._getActiveFile = function (bytesToBeWritten) {
   var active;
 
-  if (this.bytesToBeWritten + bytesToBeWritten < this.maxFileSize)
+  if (this.bytesToBeWritten + bytesToBeWritten < this.maxFileSize) {
     active = this.active
-  else
+  } else {
     active = this._wrapWriteFileSync()
+  }
 
   this.bytesToBeWritten += bytesToBeWritten;
   return active;
@@ -527,10 +549,8 @@ Medea.prototype.remove = function(key, cb) {
       delete that.keydir[key];
     }
 
-    if (err) {
-      if (cb) cb(err);
-    } else {
-      if(cb) cb();
+    if (cb) {
+      cb(err);
     }
   });
 };
@@ -564,7 +584,18 @@ Medea.prototype.sync = function(file, cb) {
   });
 };
 
-Medea.prototype.compact = function(cb) {
+Medea.prototype.compact = function(callback) {
+  var that = this;
+  var cb = function(err) {
+    if (!err) {
+      that.emit('compact');
+    }
+
+    if (callback) {
+      callback(err);
+    }
+  };
+
   this.compactor.compact(cb);
 };
 

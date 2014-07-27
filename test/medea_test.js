@@ -29,6 +29,32 @@ describe('Medea', function() {
     })
   });
 
+  describe('#open', function() {
+    it('emits an open event', function(done) {
+      var db = medea();
+      db.on('open', function() {
+        assert(true);
+        done();
+      });
+
+      db.open(directory + '_open');
+    });
+  });
+
+  describe('#close', function() {
+    it('emits a close event', function(done) {
+      var db = medea();
+      db.on('close', function() {
+        assert(true);
+        done();
+      });
+
+      db.open(directory + '_close', function() {
+        db.close();
+      });
+    });
+  });
+
   describe('#put', function() {
     it('successfully stores a String value', function(done) {
       db.put('hello', 'world', function(err) {
@@ -42,6 +68,16 @@ describe('Medea', function() {
         assert(!err);
         done();
       });
+    });
+
+    it('emits a put event', function(done) {
+      db.once('put', function(key, value) {
+        assert.equal(key.toString(), 'hello');
+        assert.equal(value.toString(), 'world');
+        done();
+      });
+
+      db.put('hello', 'world');
     });
   });
 
@@ -72,6 +108,17 @@ describe('Medea', function() {
           assert(!err);
           done();
         });
+      });
+    });
+
+    it('emits a remove event', function(done) {
+      db.once('remove', function(key) {
+        assert.equal(key.toString(), 'hello');
+        done();
+      });
+
+      db.put('hello', 'world', function() {
+        db.remove('hello');
       });
     });
   });
@@ -117,6 +164,21 @@ describe('Medea', function() {
           });
         });
       });
+    });
+
+    it('emits a write event', function(done) {
+      var batch = db.createBatch();
+      batch.put('hello', 'world');
+      batch.put('hello2', 'world2');
+      batch.remove('hello');
+
+      db.once('write', function(batch1, size) {
+        assert.deepEqual(batch1, batch);
+        assert(size > 0);
+        done();
+      });
+
+      db.write(batch);
     });
   });
 
@@ -170,6 +232,17 @@ describe('Medea', function() {
           assert(!err);
           done();
         });
+      });
+    });
+
+    it('emits a compact event', function(done) {
+      db.once('compact', function() {
+        assert(true);
+        done();
+      });
+
+      db.put('beep', 'boop', function(err) {
+        db.compact();
       });
     });
   });
