@@ -270,6 +270,26 @@ describe('Medea', function() {
     
   });
 
+  it('successfully concurrently writes large amounts of data', function(done) {
+    var max = 5000;
+    var finished = 0;
+
+    for(var index = 0; index < max; ++index) {
+      var key = new Buffer(500);
+      var val = new Buffer(500);
+      key.fill(index.toString());
+      val.fill('v');
+      db.put(key, val, function (err) {
+        assert(!err);
+        finished++;
+
+        if (finished === max) {
+          return done();
+        }
+      });
+    }
+  });
+
   after(function(done) {
     db.close(done);
   });

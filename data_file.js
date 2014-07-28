@@ -21,6 +21,8 @@ var DataFile = module.exports = function() {
   this.timestamp = null;
   this.writeLock = null;
   this.closingHintFile = false;
+  this.dataStream = null;
+  this.hintStream = null;
 };
 
 DataFile.create = function(dirname, cb) {
@@ -49,7 +51,9 @@ DataFile.create = function(dirname, cb) {
           file.dirname = dirname;
           file.readOnly = false;
           file.fd = val1.fd;
+          file.dataStream = fs.createWriteStream(filename);
           file.hintFd = val2.fd;
+          file.hintStream = fs.createWriteStream(hintFilename);
           file.hintOffset = 0;
           file.offset = 0;
           file.timestamp = stamp;
@@ -77,7 +81,9 @@ DataFile.createSync = function(dirname) {
 
   file.readOnly = false;
   file.fd = val1.fd;
+  file.dataStream = fs.createWriteStream(filename);
   file.hintFd = val2.fd;
+  file.hintStream = fs.createWriteStream(hintFilename);
   file.offset = 0;
   file.hintOffset = 0;
   file.timestamp = stamp;
@@ -86,6 +92,8 @@ DataFile.createSync = function(dirname) {
 };
 
 DataFile.prototype.write = function(bufs, options, cb) {
+  var self = this;
+
   if (typeof options === 'function') {
     cb = options;
     options = null;
@@ -94,15 +102,9 @@ DataFile.prototype.write = function(bufs, options, cb) {
   options = options || {};
   options.sync = options.sync || false;
 
-  var self = this;
-  fs.write(this.fd, bufs, 0, bufs.length, null, function(err) {
-    if (err) {
-      if (cb) cb(err);
-      return;
-    }
-
+  this.dataStream.write(bufs, function () {
     if (options.sync) {
-      fs.fsync(self.fd, cb);
+      fs.fsync(self.fd, cb)
     } else {
       cb();
     }
@@ -110,7 +112,7 @@ DataFile.prototype.write = function(bufs, options, cb) {
 };
 
 DataFile.prototype.writeHintFile = function(bufs, cb) {
-  fs.write(this.hintFd, bufs, 0, bufs.length, null, cb);
+  this.hintStream.write(bufs, cb);
 };
 
 DataFile.prototype.writeSync = function(bufs) {
