@@ -1,3 +1,4 @@
+var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
 var timestamp = require('monotonic-timestamp');
@@ -32,6 +33,8 @@ var writeCheck = constants.writeCheck;
 var Medea = function(options) {
   if (!(this instanceof Medea))
     return new Medea(options);
+
+  EventEmitter.call(this);
 
   this.active = null;
   this.keydir = {};
@@ -68,7 +71,10 @@ var Medea = function(options) {
   this.readableFiles = [];
   this.fileReferences = {};
   this.compactor = new Compactor(this);
+  this.setMaxListeners(Infinity);
 };
+
+require('util').inherits(Medea, EventEmitter);
 
 Medea.prototype.open = function(dir, options, cb) {
   if (typeof options === 'function') {
@@ -458,17 +464,23 @@ Medea.prototype.write = function(batch, options, cb) {
 Medea.prototype._getActiveFile = function (bytesToBeWritten, cb) {
   var that = this;
 
-  setImmediate(function () {
-    var active;
+  if (this.bytesToBeWritten + bytesToBeWritten < this.maxFileSize) {
+    this.bytesToBeWritten += bytesToBeWritten;
+    cb(null, this.active);
+  } else {
+    this.once('newActiveFile', function () {
+      that._getActiveFile(bytesToBeWritten, cb);
+    });
 
-    if (that.bytesToBeWritten + bytesToBeWritten < that.maxFileSize)
-      active = that.active
-    else
-      active = that._wrapWriteFileSync()
-
-    that.bytesToBeWritten += bytesToBeWritten;
-    cb(null, active);
-  });
+    if (!this.gettingNewActiveFile) {
+      this.gettingNewActiveFile = true;
+      setImmediate(function () {
+        that._wrapWriteFileSync()
+        that.gettingNewActiveFile = false;
+        that.emit('newActiveFile');
+      });
+    }
+  }
 }
 
 Medea.prototype._wrapWriteFileSync = function() {
