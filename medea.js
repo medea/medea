@@ -474,13 +474,33 @@ Medea.prototype._getActiveFile = function (bytesToBeWritten, cb) {
 
     if (!this.gettingNewActiveFile) {
       this.gettingNewActiveFile = true;
-      setImmediate(function () {
-        that._wrapWriteFileSync()
+      that._wrapWriteFile(function () {
         that.gettingNewActiveFile = false;
         that.emit('newActiveFile');
       });
     }
   }
+}
+
+Medea.prototype._wrapWriteFile = function (cb) {
+  var oldFile = this.active;
+  var that = this;
+  DataFile.create(this.dirname, function (err, file) {
+    if (err) {
+      return cb(err);
+    }
+
+    that.writeLock.writeActiveFile(that.dirname, file, function (err) {
+      if (err) {
+        return cb(err);
+      }
+
+      that.active = file;
+      that.readableFiles.push(file);
+      that.bytesToBeWritten = 0;
+      oldFile.closeForWriting(cb);
+    });
+  });
 }
 
 Medea.prototype._wrapWriteFileSync = function() {
