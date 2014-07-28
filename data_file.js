@@ -127,26 +127,21 @@ DataFile.prototype.closeForWriting = function(cb) {
   }
 
   var self = this;
-  fs.fsync(this.fd, function(err) {
-    if (err) {
-      cb(err);
-      return;
-    }
 
-    self._closeHintFile(function(err) {
-      if (cb) cb(err);
+  this.dataStream.end(function () {
+    // TODO: write to the fd that belongs to the dataStream rather than the
+    // one used for reading
+    fs.fsync(self.fd, function(err) {
+      if (err) {
+        cb(err);
+        return;
+      }
+
+      self._closeHintFile(function(err) {
+        if (cb) cb(err);
+      });
     });
   });
-};
-
-DataFile.prototype.closeForWritingSync = function() {
-  if (this.readOnly) {
-    return;
-  }
-
-  fs.fsyncSync(this.fd);
-
-  this._closeHintFileSync();
 };
 
 DataFile.prototype._closeHintFile = function(cb) {
@@ -162,36 +157,18 @@ DataFile.prototype._closeHintFile = function(cb) {
   this.hintCrc.copy(crcBuf, 0, 0, this.hintCrc.length);
 
   var that = this;
-  this.writeHintFile(crcBuf, function() {
+  this.hintStream.write(crcBuf, function() {
     fs.fsync(that.hintFd, function(err) {
       if (err) {
         //console.log('Error fsyncing hint file during close.', err);
         if (cb) cb(err);
         return;
       }
-      fs.close(that.hintFd, function(err) {
+      that.hintStream.end(function(err) {
         that.hintFd = null;
         that.hintCrc = new Buffer(sizes.crc);
         if (cb) cb();
       });
     });
   });
-};
-
-DataFile.prototype._closeHintFileSync = function() {
-  if (!this.hintFd || this.closingHintFile) {
-    return;
-  }
-
-  this.closingHintFile = true;
-  var hintFilename = this.dirname + '/' + this.timestamp + '.medea.hint';
-  
-  var crcBuf = new Buffer(sizes.crc);
-  this.hintCrc.copy(crcBuf, 0, 0, this.hintCrc.length);
-
-  var that = this;
-  fs.fsyncSync(this.hintFd);
-  fs.closeSync(this.hintFd);
-  this.hintFd = null;
-  this.hintCrc = new Buffer(sizes.crc);
 };
