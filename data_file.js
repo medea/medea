@@ -1,4 +1,5 @@
 var fs = require('fs');
+var appendStream = require('append-stream');
 var parallel = require('run-parallel');
 var constants = require('./constants');
 var fileops = require('./fileops');
@@ -34,10 +35,10 @@ DataFile.create = function(dirname, cb) {
 
       parallel({
           dataStream: function (done) {
-            fileops.createWriteStream(filename, done);
+            appendStream(filename, done);
           },
           hintStream: function (done) {
-            fileops.createWriteStream(hintFilename, done);
+            appendStream(hintFilename, done);
           }
         },
         function (err, results) {
