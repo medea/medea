@@ -15,6 +15,8 @@ describe('DataFile', function() {
         assert(file.dirname, directory);
         assert(!!file.fd);
         assert(!!file.hintFd);
+        assert(!!file.hintStream);
+        assert(!!file.dataStream);
         assert(!!file.filename);
 
         done();
@@ -23,8 +25,10 @@ describe('DataFile', function() {
 
     it('elevates data file open errors', function(done) {
       var coreOpen = fs.open;
-      fs.open = function(filename, mode, cb) {
-        cb(new Error('OHNOES!'));
+      fs.open = function(filename, flag, mode, cb) {
+        setImmediate(function () {
+          cb(new Error('OHNOES!'));
+        });
       };
       DataFile.create(directory, function(err, file) {
         assert.equal(err.message, 'OHNOES!');
@@ -36,10 +40,12 @@ describe('DataFile', function() {
     it('elevates hint file open errors', function(done) {
       var coreOpen = fs.open;
       var counter = 0;
-      fs.open = function(filename, mode, cb) {
+      fs.open = function(filename, flag, mode, cb) {
         counter++;
         if (counter === 2) {
-          cb(new Error('OHNOES!'));
+          setImmediate(function () {
+            cb(new Error('OHNOES!'));
+          });
         } else {
           coreOpen(filename, mode, cb);
         }

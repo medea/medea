@@ -579,13 +579,13 @@ Medea.prototype.sync = function(file, cb) {
   }
 
   var that = this;
-  fs.fsync(file.fd, function(err) {
+  fs.fsync(file.dataStream.fd, function(err) {
     if (err) {
       cb(err);
       return;
     }
 
-    fs.fsync(file.hintFd, cb);
+    fs.fsync(file.hintStream.fd, cb);
   });
 };
 

@@ -1,4 +1,5 @@
 var fs = require('fs');
+var parallel = require('run-parallel');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var sizes = constants.sizes;
@@ -17,7 +18,6 @@ var DataFile = module.exports = function() {
   this.hintFd = null;
   this.readOnly = true;
   this.hintCrc = new Buffer(sizes.crc);
-  this.hintOffset = 0;
   this.timestamp = null;
   this.writeLock = null;
   this.closingHintFile = false;
@@ -30,37 +30,53 @@ DataFile.create = function(dirname, cb) {
     fileops.mostRecentTstamp(dirname, function(err, stamp) {
       stamp = stamp + 1;
       var filename = dirname + '/' + stamp + '.medea.data';
-
       var file = new DataFile();
       file.filename = filename;
+      file.dirname = dirname;
+      file.readOnly = false;
+      file.timestamp = stamp;
 
-      fileops.open(file, function(err, val1) {
-        if (err) {
-          cb(err);
-          return;
-        }
-        var hintFilename = dirname + '/' + stamp + '.medea.hint';
-        var hintFile = new HintFile();
-        hintFile.filename = hintFilename;
-        fileops.open(hintFile, function(err, val2) {
+      var hintFilename = dirname + '/' + stamp + '.medea.hint';
+      var hintFile = new HintFile();
+      hintFile.filename = hintFilename;
+
+      parallel({
+          dataStream: function (done) {
+            fileops.createWriteStream(filename, done);
+          },
+          hintStream: function (done) {
+            fileops.createWriteStream(hintFilename, done);
+          }
+        },
+        function (err, results) {
           if (err) {
-            cb(err)
-            return;
+            return cb(err);
           }
 
-          file.dirname = dirname;
-          file.readOnly = false;
-          file.fd = val1.fd;
-          file.dataStream = fs.createWriteStream(filename);
-          file.hintFd = val2.fd;
-          file.hintStream = fs.createWriteStream(hintFilename);
-          file.hintOffset = 0;
-          file.offset = 0;
-          file.timestamp = stamp;
+          file.dataStream = results.dataStream;
+          file.hintStream = results.hintStream;
 
-          if (cb) cb(null, file);
-        });
-      });
+          parallel({
+              dataFd: function (done) {
+                fs.open(file.filename, 'r', done);
+              },
+              hintFd: function (done) {
+                fs.open(hintFile.filename, 'r', done);
+              }
+            },
+            function (err, results) {
+              if (err) {
+                return cb(err);
+              }
+
+              file.fd = results.dataFd;
+              file.hintFd = results.hintFd;
+
+              cb(null, file);
+            }
+          ); 
+        }
+      );
     });
   });
 };
@@ -103,8 +119,6 @@ DataFile.prototype.closeForWriting = function(cb) {
   var self = this;
 
   this.dataStream.end(function () {
-    // TODO: write to the fd that belongs to the dataStream rather than the
-    // one used for reading
     fs.fsync(self.fd, function(err) {
       if (err) {
         cb(err);

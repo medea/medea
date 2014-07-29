@@ -2,17 +2,20 @@ var fs = require('fs');
 var constants = require('./constants');
 var sizes = constants.sizes;
 
-exports.open = function(file, cb) {
-  fs.open(file.filename, 'a+', function(err, value) {
-    if (err) {
-      cb(err);
-      return;
-    }
+exports.createWriteStream = function (dir, cb) {
+  var stream = fs.createWriteStream(dir);
+  var onerror = function (err) {
+    stream.removeListener('open', onopen);
+    cb(err);
+  };
+  var onopen = function () {
+    stream.removeListener('error', onerror);
+    cb(null, stream);
+  };
 
-    file.fd = value;
-    cb(null, file);
-  });
-};
+  stream.once('error', onerror);
+  stream.once('open', onopen);
+}
 
 exports.ensureDir = function(dir, cb) {
   fs.stat(dir, function(err, stat) {
