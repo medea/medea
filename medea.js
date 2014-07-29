@@ -503,19 +503,6 @@ Medea.prototype._wrapWriteFile = function (cb) {
   });
 }
 
-Medea.prototype._wrapWriteFileSync = function() {
-  var oldFile = this.active;
-  var file = DataFile.createSync(this.dirname);
-
-  this.writeLock.writeActiveFileSync(this.dirname, file);
-  this.active = file;
-  this.readableFiles.push(file);
-  oldFile.closeForWritingSync();
-  this.bytesToBeWritten = 0;
-
-  return file;
-};
-
 Medea.prototype.get = function(key, snapshot, cb) {
   if (!cb) {
     cb = snapshot;

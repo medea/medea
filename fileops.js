@@ -14,12 +14,6 @@ exports.open = function(file, cb) {
   });
 };
 
-exports.openSync = function(file) {
-  var fd = fs.openSync(file.filename, 'a+');
-  file.fd = fd;
-  return file;
-};
-
 exports.ensureDir = function(dir, cb) {
   fs.stat(dir, function(err, stat) {
     if (!stat) {

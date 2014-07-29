@@ -65,32 +65,6 @@ DataFile.create = function(dirname, cb) {
   });
 };
 
-DataFile.createSync = function(dirname) {
-  var stamp = fileops.mostRecentTstampSync(dirname);
-  stamp = stamp + 1;
-  var filename = dirname + '/' + stamp + '.medea.data';
-  var file = new DataFile();
-  file.filename = filename;
-  file.dirname = dirname;
-  var val1 = fileops.openSync(file)
-
-  var hintFilename = dirname + '/' + stamp + '.medea.hint';
-  var hintFile = new HintFile();
-  hintFile.filename = hintFilename;
-  var val2 = fileops.openSync(hintFile);
-
-  file.readOnly = false;
-  file.fd = val1.fd;
-  file.dataStream = fs.createWriteStream(filename);
-  file.hintFd = val2.fd;
-  file.hintStream = fs.createWriteStream(hintFilename);
-  file.offset = 0;
-  file.hintOffset = 0;
-  file.timestamp = stamp;
-
-  return file;
-};
-
 DataFile.prototype.write = function(bufs, options, cb) {
   var self = this;
 
@@ -114,11 +88,6 @@ DataFile.prototype.write = function(bufs, options, cb) {
 DataFile.prototype.writeHintFile = function(bufs, cb) {
   this.hintStream.write(bufs, cb);
 };
-
-DataFile.prototype.writeSync = function(bufs) {
-  return fs.writeSync(this.fd, bufs, 0, bufs.length, null);
-};
-
 
 DataFile.prototype.closeForWriting = function(cb) {
   if (this.readOnly) {
