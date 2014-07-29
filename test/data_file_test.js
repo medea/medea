@@ -52,16 +52,6 @@ describe('DataFile', function() {
     });
   });
 
-  describe('.createSync', function() {
-    it('creates a data file synchronously', function() {
-      var file = DataFile.createSync(directory);
-      assert(file.dirname, directory);
-      assert(!!file.fd);
-      assert(!!file.hintFd);
-      assert(!!file.filename);
-    });
-  });
-
   describe('#write', function() {
     it('writes buffers asynchronously', function(done) {
       DataFile.create(directory, function(err, file) {
@@ -83,15 +73,6 @@ describe('DataFile', function() {
           done();
         });
       });
-    });
-  });
-
-  describe('#writeSync', function() {
-    it('writes buffers synchronously', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('soup');
-      var ret = file.writeSync(buf);
-      assert(!!ret);
     });
   });
 
@@ -189,46 +170,6 @@ describe('DataFile', function() {
           });
         });
       });
-    });
-  });
-
-  describe('#closeForWritingSync', function() {
-    it('closes the file when data has been written', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('hotdogmania');
-      file.writeSync(buf);
-      file.offset = buf.length;
-      file.closeForWritingSync();
-
-      assert.equal(file.hintFd, null);
-    });
-
-    it('closes the file when data has not been written', function() {
-      var file = DataFile.createSync(directory);
-      file.closeForWritingSync();
-      assert.equal(file.hintFd, null);
-    });
-
-    it('completes the operation even if the file is readonly', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('hotdogmania');
-      file.writeSync(buf);
-      file.offset = buf.length;
-      file.readOnly = true;
-      file.closeForWritingSync();
-
-      assert(!!file.hintFd);
-    });
-
-    it('handles overlapping close operations', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('hotdogmania');
-      file.writeSync(buf);
-      file.offset = buf.length;
-      file.closeForWritingSync();
-      file.closeForWritingSync();
-
-      assert(!file.hintFd);
     });
   });
 });

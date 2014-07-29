@@ -80,11 +80,11 @@ describe('HintFileParser', function() {
           var val = new Buffer(500);
           val.fill('v');
           var buf = createStringBuffer('hello' + i, val.toString());
-          file.writeSync(buf);
+          file.write(buf);
           var buf = createStringBuffer('hello1' + i, val.toString());
-          file.writeSync(buf);
+          file.write(buf);
           var buf = createStringBuffer('hello2' + i, val.toString());
-          file.writeSync(buf);
+          file.write(buf);
           var oldOffset = file.offset;
           var hintBufs = createHintBuffer(file, buf, 'hello' + i, val.toString());
           file.writeHintFile(hintBufs, function(err) {
@@ -128,9 +128,17 @@ describe('HintFileParser', function() {
       });
     });
 
-    after(function() {
+    after(function(done) {
+      var active = files.length;
+      var callback = function () {
+        active--;
+        if (active === 0) {
+          done();
+        }
+      }
+
       files.forEach(function(file) {
-        file.closeForWritingSync();
+        file.closeForWriting(callback);
       });
     });
   });

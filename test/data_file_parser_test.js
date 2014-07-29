@@ -39,7 +39,7 @@ function createStringBuffer(k, v) {
 
 function writeBuffers(bufs) {
   bufs.forEach(function(buf) {
-    file.writeSync(buf);
+    file.write(buf);
   });
 }
 

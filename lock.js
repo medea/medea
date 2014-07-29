@@ -94,11 +94,3 @@ Lock.prototype.writeActiveFile = function(dirname, file, cb) {
     cb(null);
   });
 };
-
-Lock.prototype.writeActiveFileSync = function(dirname, file) {
-  var filename = file ? file.filename : '';
-  var lockfile = dirname + '/medea.write.lock';
-
-  var buf = new Buffer(process.pid + ' ' + (filename || '') + '\n');
-  fs.writeSync(this.fd, buf, 0, buf.length, 0);
-};

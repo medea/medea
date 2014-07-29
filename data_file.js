@@ -73,6 +73,10 @@ DataFile.prototype.write = function(bufs, options, cb) {
     options = null;
   }
 
+  if (typeof cb === 'undefined') {
+    cb = function () {};
+  }
+
   options = options || {};
   options.sync = options.sync || false;
 
@@ -95,6 +99,7 @@ DataFile.prototype.closeForWriting = function(cb) {
     return;
   }
 
+  this.readOnly = true;
   var self = this;
 
   this.dataStream.end(function () {
