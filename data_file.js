@@ -4,12 +4,6 @@ var constants = require('./constants');
 var fileops = require('./fileops');
 var sizes = constants.sizes;
 
-var HintFile = function() {
-  this.filename = null;
-  this.fd = null;
-  this.offset = 0;
-};
-
 var DataFile = module.exports = function() {
   this.dirname = null;
   this.filename = null;
@@ -37,8 +31,6 @@ DataFile.create = function(dirname, cb) {
       file.timestamp = stamp;
 
       var hintFilename = dirname + '/' + stamp + '.medea.hint';
-      var hintFile = new HintFile();
-      hintFile.filename = hintFilename;
 
       parallel({
           dataStream: function (done) {
@@ -61,7 +53,7 @@ DataFile.create = function(dirname, cb) {
                 fs.open(file.filename, 'r', done);
               },
               hintFd: function (done) {
-                fs.open(hintFile.filename, 'r', done);
+                fs.open(hintFilename, 'r', done);
               }
             },
             function (err, results) {
