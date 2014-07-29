@@ -2,6 +2,7 @@ var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
 var timestamp = require('monotonic-timestamp');
+var parallel = require('run-parallel');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -93,21 +94,34 @@ Medea.prototype.open = function(dir, options, cb) {
   var that = this;
   var scanFiles = function(cb) {
     that._getReadableFiles(function(err, arr) {
-      arr.forEach(function(f) {
-        var fd = fs.openSync(f, 'r');
-        var readable = new DataFile();
-        readable.fd = fd;
-        readable.filename = f;
-        readable.dirname = that.dirname;
+      var tasks = arr.map(function (f) {
+        return function (done) {
+          fs.open(f, 'r', function (err, fd) {
+            if (err) {
+              return done(err);
+            }
 
-        var filename = f.replace('\\', '/').split('/');
-        readable.timestamp = filename[filename.length - 1].split('.')[0];
-        readable.timestamp = Number(readable.timestamp);
+            var readable = new DataFile();
+            readable.fd = fd;
+            readable.filename = f;
+            readable.dirname = that.dirname;
 
-        that.readableFiles.push(readable);
+            var filename = f.replace('\\', '/').split('/');
+            readable.timestamp = filename[filename.length - 1].split('.')[0];
+            readable.timestamp = Number(readable.timestamp);
+
+            that.readableFiles.push(readable);
+            done(null)
+          });
+        }
       });
-      that._scanKeyFiles(arr, function() {
-        if (cb) cb();
+
+      parallel(tasks, function (err) {
+        if (err) {
+          return cb(err);
+        }
+
+        that._scanKeyFiles(arr, cb);
       });
     });
   };
@@ -250,11 +264,17 @@ Medea.prototype._acquire = function(dir, type, cb) {
 
 Medea.prototype._closeReadableFiles = function(cb) {
   var that = this;
-  this.readableFiles.forEach(function(f) {
-    if (f.fd !== that.active.fd) {
-      fs.closeSync(f.fd);
-    }
-  });
+  var tasks = this.readableFiles
+    .filter(function (file) {
+      return file.fd !== that.active.fd
+    })
+    .map(function (file) {
+      return function (done) {
+        fs.close(file.fd, done);
+      }
+    });
+
+  parallel(tasks, cb);
 };
 
 Medea.prototype.close = function(cb) {
@@ -266,8 +286,7 @@ Medea.prototype.close = function(cb) {
           fs.unlink(that.active.filename.replace('.data', '.hint'), function(err) {
             fs.unlink(that.writeLock.filename, function(err) {
               fs.close(that.writeLock.fd, function() {
-                that._closeReadableFiles();
-                if (cb) cb();
+                that._closeReadableFiles(cb);
               });
             });
           });
@@ -276,8 +295,7 @@ Medea.prototype.close = function(cb) {
     } else {
       fs.unlink(that.writeLock.filename, function(err) {
         fs.close(that.writeLock.fd, function() {
-          that._closeReadableFiles();
-          if (cb) cb();
+          that._closeReadableFiles(cb);
         });
       });
     }
