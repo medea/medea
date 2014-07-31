@@ -178,8 +178,8 @@ Medea.prototype._scanKeyFiles = function(arr, cb) {
 
 Medea.prototype._getReadableFiles = function(cb) {
   var self = this;
-  var writingFile = Lock.readActiveFile(this.dirname, 'write', function(err, writeFile) {
-    var mergingFile = Lock.readActiveFile(self.dirname, 'merge', function(err, mergeFile) {
+  Lock.readActiveFile(this.dirname, 'write', function(err, writeFile) {
+    Lock.readActiveFile(self.dirname, 'merge', function(err, mergeFile) {
       // TODO: Filter out files marked for deletion by successful merge.
       fileops.listDataFiles(self.dirname, writeFile, mergeFile, function(err, files) {
         cb(null, files);
@@ -532,36 +532,36 @@ Medea.prototype.get = function(key, snapshot, cb) {
     return cb(new Error('Snapshot is closed'));
 
   var entry = snapshot ? snapshot.keydir[key] : this.keydir[key];
-  if (entry) {
-    var filename = this.dirname + '/' + entry.fileId + '.medea.data';
-    var fd;
-    this.readableFiles.forEach(function(df) {
-      if (df.timestamp === entry.fileId) {
-        fd = df.fd;
-      }
-    });
+  if (!entry) {
+    if (cb) cb();
+    return;
+  }
 
-    if (!fd) {
-      cb(new Error('Invalid file ID.'));
+  var fd;
+  this.readableFiles.forEach(function(df) {
+    if (df.timestamp === entry.fileId) {
+      fd = df.fd;
+    }
+  });
+
+  if (!fd) {
+    cb(new Error('Invalid file ID.'));
+    return;
+  }
+
+  var buf = new Buffer(entry.valueSize);
+  fs.read(fd, buf, 0, entry.valueSize, entry.valuePosition, function(err) {
+    if (err) {
+      cb(err);
       return;
     }
 
-    var buf = new Buffer(entry.valueSize);
-    fs.read(fd, buf, 0, entry.valueSize, entry.valuePosition, function(err, bytesRead) {
-      if (err) {
-        cb(err);
-        return;
-      }
-
-      if (!utils.isTombstone(buf)) {
-        cb(null, buf);
-      } else {
-        if (cb) cb();
-      }
-    });
-  } else {
-    if (cb) cb();
-  }
+    if (!utils.isTombstone(buf)) {
+      cb(null, buf);
+    } else {
+      if (cb) cb();
+    }
+  });
 };
 
 Medea.prototype.remove = function(key, cb) {
@@ -597,7 +597,6 @@ Medea.prototype.sync = function(file, cb) {
     file = this.active;
   }
 
-  var self = this;
   fs.fsync(file.dataStream.fd, function(err) {
     if (err) {
       cb(err);

@@ -46,35 +46,26 @@ Lock.readActiveFile = function(dirname, type, cb) {
       len += chunk.length;
     };
 
-    var onend = function(lockFd) {
-      return function() {
-        if (!bufs || !bufs.length) {
-          cb(null, '');
-          return;
-        };
-        var all = new Buffer(len);
-        var offset = 0;
-        bufs.forEach(function(buf) {
-          buf.copy(all, 0, offset, buf.length);
-          offset += buf.length;
-        });
-
-        var text = all.toString();
-
-        var arr = text.replace('\n', '').split(' ');
-
-        // release lock?
-        if (arr.length && arr[1]) {
-          cb(null, arr[1]);
-        } else {
-          cb(null, '');
-        }
+    var onend = function() {
+      if (!bufs || !bufs.length) {
+        cb(null, '');
+        return;
       };
+
+      var text = Buffer.concat(bufs, len).toString();
+      var arr = text.replace('\n', '').split(' ');
+
+      // release lock?
+      if (arr.length && arr[1]) {
+        cb(null, arr[1]);
+      } else {
+        cb(null, '');
+      }
     };
 
     var stream = fs.createReadStream(filename, { fd: lock.fd });
     stream.on('data', ondata);
-    stream.on('end', onend(lock.fd));
+    stream.on('end', onend);
     stream.on('error', function(err) {
       cb(err);
     });

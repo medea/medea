@@ -130,13 +130,9 @@ DataFile.prototype._closeHintFile = function(cb) {
   }
 
   this.closingHintFile = true;
-  var hintFilename = this.dirname + '/' + this.timestamp + '.medea.hint';
-  
-  var crcBuf = new Buffer(sizes.crc);
-  this.hintCrc.copy(crcBuf, 0, 0, this.hintCrc.length);
 
   var self = this;
-  this.hintStream.write(crcBuf, function() {
+  this.hintStream.write(this.hintCrc, function() {
     fs.fsync(self.hintFd, function(err) {
       if (err) {
         //console.log('Error fsyncing hint file during close.', err);
