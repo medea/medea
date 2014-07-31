@@ -218,28 +218,28 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
 };
 
 Compactor.prototype._getActiveMerge = function (bytesToBeWritten, cb) {
-  var that = this;
+  var self = this;
 
   if (this.bytesToBeWritten + bytesToBeWritten < this.db.maxFileSize) {
     this.bytesToBeWritten += bytesToBeWritten;
     cb(null, this.activeMerge);
   } else {
     this.once('newActiveMergeFile', function () {
-      that._getActiveMerge(bytesToBeWritten, cb);
+      self._getActiveMerge(bytesToBeWritten, cb);
     });
 
     if (!this.gettingNewActiveFile) {
       this.gettingNewActiveFile = true;
-      that._wrapWriteFile(function () {
-        that.gettingNewActiveFile = false;
-        that.emit('newActiveMergeFile');
+      self._wrapWriteFile(function () {
+        self.gettingNewActiveFile = false;
+        self.emit('newActiveMergeFile');
       });
     }
   }
 }
 
 Compactor.prototype._wrapWriteFile = function(cb) {
-  var that = this;
+  var self = this;
   var oldFile = this.activeMerge;
 
   DataFile.create(this.db.dirname, function (err, file) {
@@ -247,15 +247,15 @@ Compactor.prototype._wrapWriteFile = function(cb) {
       return cb(err);
     }
 
-    that.activeMerge = file;
-    that.db.readableFiles.push(file);
-    that.bytesToBeWritten = 0;
+    self.activeMerge = file;
+    self.db.readableFiles.push(file);
+    self.bytesToBeWritten = 0;
     oldFile.closeForWriting(cb);
   });
 };
 
 Compactor.prototype._innerMergeWrite = function(dataEntry, cb) {
-  var that = this;
+  var self = this;
   var buf = dataEntry.buffer;
 
   this._getActiveMerge(buf.length, function (err, file) {
@@ -309,7 +309,7 @@ Compactor.prototype._innerMergeWrite = function(dataEntry, cb) {
             if (cb) return cb(err);
           }
 
-          that.db.keydir[key] = entry;
+          self.db.keydir[key] = entry;
 
           if (cb) cb();
         });
