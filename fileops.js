@@ -2,22 +2,6 @@ var fs = require('fs');
 var constants = require('./constants');
 var sizes = constants.sizes;
 
-exports.ensureDir = function(dir, cb) {
-  fs.stat(dir, function(err, stat) {
-    if (!stat) {
-      fs.mkdir(dir, function(err) {
-        if (err) {
-          cb(err);
-          return;
-        }
-        if (cb) cb();
-      });
-    } else {
-      if (cb) cb();
-    }
-  });
-};
-
 var dataFileTstamps = exports.dataFileTstamps = function(dirname, cb) {
   fs.readdir(dirname, function(err, files) {
     if (err) {

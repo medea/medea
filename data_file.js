@@ -21,7 +21,7 @@ var DataFile = module.exports = function() {
 };
 
 DataFile.create = function(dirname, cb) {
-  fileops.ensureDir(dirname, function(err) {
+  require('mkdirp')(dirname, function(err) {
     fileops.mostRecentTstamp(dirname, function(err, stamp) {
       stamp = stamp + 1;
       var filename = dirname + '/' + stamp + '.medea.data';

@@ -127,7 +127,7 @@ Medea.prototype.open = function(dir, options, cb) {
     }
   }
 
-  fileops.ensureDir(dir, function(err) {
+  require('mkdirp')(dir, function(err) {
     if (err) {
       if (cb) cb(err);
     } else {
