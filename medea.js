@@ -93,48 +93,71 @@ Medea.prototype.open = function(dir, options, cb) {
   this.dirname = dir;
 
   var self = this;
-  var scanFiles = function(cb) {
-    self._unlinkEmptyFiles(function (err) {
-      self._getReadableFiles(function(err, arr) {
-        self._openFiles(arr, function (err) {
+
+  require('mkdirp')(dir, function(err) {
+    if (err) {
+      return cb(err);
+    }
+
+    self._scanFiles(function (err) {
+      if (err) {
+        return cb(err);
+      }
+
+      if (self.readOnly) {
+        return cb();
+      }
+
+      self._acquire(self.dirname, 'write', function(err, writeLock) {
+        if (err) {
+          return cb(err);
+        }
+
+        DataFile.create(self.dirname, function(err, file) {
           if (err) {
             return cb(err);
           }
 
-          self._scanKeyFiles(arr, cb);
-        });
-      });
-    });
-  };
+          writeLock.writeActiveFile(self.dirname, file, function(err) {
+            if (err) {
+              return cb(err);
+            }
 
-  var next = function(dir, readOnly, cb) {
-    if (!readOnly) {
-      scanFiles(function() {
-        self._acquire(dir, 'write', function(err, writeLock) {
-          DataFile.create(self.dirname, function(err, file) {
-            writeLock.writeActiveFile(self.dirname, file, function() {
-              self.active = file;
-              self.readableFiles.push(self.active);
-              if (cb) cb();
-            });
+            self.active = file;
+            self.readableFiles.push(self.active);
+            cb();
           });
         });
       });
-    } else {
-      scanFiles(function() {
-        cb();
-      });
-    }
-  }
-
-  require('mkdirp')(dir, function(err) {
-    if (err) {
-      if (cb) cb(err);
-    } else {
-      next(dir, self.readOnly, cb);
-    }
+    });
   });
 };
+
+Medea.prototype._scanFiles = function (cb) {
+
+  var self = this;
+
+  this._unlinkEmptyFiles(function (err) {
+    if (err) {
+      return cb(err);
+    }
+
+    self._getReadableFiles(function(err, arr) {
+
+      if (err) {
+        return cb(err);
+      }
+
+      self._openFiles(arr, function (err) {
+        if (err) {
+          return cb(err);
+        }
+
+        self._scanKeyFiles(arr, cb);
+      });
+    });
+  });
+}
 
 Medea.prototype._unlinkEmptyFiles = function (cb) {
   var filter = function (file) {
