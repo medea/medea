@@ -3,6 +3,7 @@ var fs = require('fs');
 var crc32 = require('buffer-crc32');
 var timestamp = require('monotonic-timestamp');
 var parallel = require('run-parallel');
+var unlinkEmptyFiles = require('unlink-empty-files');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -136,40 +137,12 @@ Medea.prototype.open = function(dir, options, cb) {
 };
 
 Medea.prototype._unlinkEmptyFiles = function (cb) {
+  var filter = function (file) {
+    var slice = file.slice(-5);
+    return slice === '.data' || slice === '.hint';
+  }
 
-  var self = this;
-
-  fs.readdir(this.dirname, function(err, files) {
-    if (err) {
-      return cb(err);
-    }
-
-    var tasks = files
-      .filter(function (f) {
-        return f.slice(-5) === '.hint';
-      })
-      .map(function (f) {
-        var filename = self.dirname + '/' + f;
-
-        return function (done) {
-          fs.stat(filename, function (err, stat) {
-            if (err || stat.size > 0) {
-              return done(err);
-            }
-
-            fs.unlink(filename.replace('.hint', '.data'), function (err) {
-              if (err) {
-                return done(err);
-              }
-
-              fs.unlink(filename, done);
-            });
-          });
-        }
-      });
-
-    parallel(tasks, cb);
-  });
+  unlinkEmptyFiles(this.dirname, filter, cb);
 }
 
 Medea.prototype._openFiles = function (filenames, cb) {

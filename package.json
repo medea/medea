@@ -18,7 +18,8 @@
     "buffer-crc32": "~0.2.1",
     "buffer-equal": "0.0.1",
     "monotonic-timestamp": "0.0.8",
-    "run-parallel": "~1.0.0"
+    "run-parallel": "~1.0.0",
+    "unlink-empty-files": "^1.0.0"
   },
   "readmeFilename": "README.md",
   "gitHead": "c943892dee98ea8f0ae518e286ac9a26e844b21c",
