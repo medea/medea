@@ -21,56 +21,54 @@ var DataFile = module.exports = function() {
 };
 
 DataFile.create = function(dirname, cb) {
-  require('mkdirp')(dirname, function(err) {
-    fileops.mostRecentTstamp(dirname, function(err, stamp) {
-      stamp = stamp + 1;
-      var filename = dirname + '/' + stamp + '.medea.data';
-      var file = new DataFile();
-      file.filename = filename;
-      file.dirname = dirname;
-      file.readOnly = false;
-      file.timestamp = stamp;
+  fileops.mostRecentTstamp(dirname, function(err, stamp) {
+    stamp = stamp + 1;
+    var filename = dirname + '/' + stamp + '.medea.data';
+    var file = new DataFile();
+    file.filename = filename;
+    file.dirname = dirname;
+    file.readOnly = false;
+    file.timestamp = stamp;
 
-      var hintFilename = dirname + '/' + stamp + '.medea.hint';
+    var hintFilename = dirname + '/' + stamp + '.medea.hint';
 
-      parallel({
-          dataStream: function (done) {
-            appendStream(filename, done);
-          },
-          hintStream: function (done) {
-            appendStream(hintFilename, done);
-          }
+    parallel({
+        dataStream: function (done) {
+          appendStream(filename, done);
         },
-        function (err, results) {
-          if (err) {
-            return cb(err);
-          }
-
-          file.dataStream = results.dataStream;
-          file.hintStream = results.hintStream;
-
-          parallel({
-              dataFd: function (done) {
-                fs.open(file.filename, 'r', done);
-              },
-              hintFd: function (done) {
-                fs.open(hintFilename, 'r', done);
-              }
-            },
-            function (err, results) {
-              if (err) {
-                return cb(err);
-              }
-
-              file.fd = results.dataFd;
-              file.hintFd = results.hintFd;
-
-              cb(null, file);
-            }
-          ); 
+        hintStream: function (done) {
+          appendStream(hintFilename, done);
         }
-      );
-    });
+      },
+      function (err, results) {
+        if (err) {
+          return cb(err);
+        }
+
+        file.dataStream = results.dataStream;
+        file.hintStream = results.hintStream;
+
+        parallel({
+            dataFd: function (done) {
+              fs.open(file.filename, 'r', done);
+            },
+            hintFd: function (done) {
+              fs.open(hintFilename, 'r', done);
+            }
+          },
+          function (err, results) {
+            if (err) {
+              return cb(err);
+            }
+
+            file.fd = results.dataFd;
+            file.hintFd = results.hintFd;
+
+            cb(null, file);
+          }
+        ); 
+      }
+    );
   });
 };
 

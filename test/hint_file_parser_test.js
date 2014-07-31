@@ -67,8 +67,9 @@ function createStringBuffer(k, v) {
 }
 
 describe('HintFileParser', function() {
-  before(function (done) {
-    require('rimraf')(directory, done);
+  before(function () {
+    require('rimraf').sync(directory);
+    require('mkdirp').sync(directory);
   });
 
   describe('.parse', function() {
