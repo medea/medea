@@ -2,7 +2,7 @@ var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
 var timestamp = require('monotonic-timestamp');
-var parallel = require('run-parallel');
+var async = require('async');
 var unlinkEmptyFiles = require('unlink-empty-files');
 var constants = require('./constants');
 var fileops = require('./fileops');
@@ -147,8 +147,10 @@ Medea.prototype._unlinkEmptyFiles = function (cb) {
 
 Medea.prototype._openFiles = function (filenames, cb) {
   var self = this;
-  var tasks = filenames.map(function (f) {
-    return function (done) {
+
+  async.forEach(
+    filenames,
+    function (f, done) {
       fs.open(f, 'r', function (err, fd) {
         if (err) {
           return done(err);
@@ -166,10 +168,9 @@ Medea.prototype._openFiles = function (filenames, cb) {
         self.readableFiles.push(readable);
         done(null)
       });
-    }
-  });
-
-  parallel(tasks, cb)
+    },
+    cb
+  );
 };
 
 Medea.prototype._scanKeyFiles = function(arr, cb) {
@@ -289,7 +290,7 @@ Medea.prototype._closeReadableFiles = function(cb) {
       }
     });
 
-  parallel(tasks, cb);
+  async.parallel(tasks, cb);
 };
 
 Medea.prototype.close = function(cb) {

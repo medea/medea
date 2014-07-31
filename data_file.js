@@ -1,6 +1,6 @@
 var fs = require('fs');
 var appendStream = require('append-stream');
-var parallel = require('run-parallel');
+var parallel = require('async').parallel;
 var constants = require('./constants');
 var fileops = require('./fileops');
 var sizes = constants.sizes;

@@ -1,6 +1,7 @@
 var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 
+var async = require('async');
 var crc32 = require('buffer-crc32');
 
 var constants = require('./constants');
@@ -60,7 +61,7 @@ Compactor.prototype.compact = function (cb) {
 
     self.db.readableFiles.push(self.activeMerge)
 
-    self._compactFile(files, 0, function(err) {
+    self._compactFiles(files, function(err) {
       if (err) {
         cb(err);
         return;
@@ -85,7 +86,7 @@ Compactor.prototype.compact = function (cb) {
             return files.indexOf(file) === -1;
           });
 
-        self._unlink(dataFileNames.concat(hintFileNames), 0, function(err) {
+        self._unlink(dataFileNames.concat(hintFileNames), function(err) {
           if (err) {
             if (cb) cb(err);
             return;
@@ -98,34 +99,30 @@ Compactor.prototype.compact = function (cb) {
   });
 }
 
-Compactor.prototype._unlink = function(filenames, index, cb) {
-  var self = this;
-
-  fs.unlink(filenames[index], function(err) {
-    if (index === filenames.length - 1) {
-      cb();
-      return;
-    }
-
-    self._unlink(filenames, ++index, cb);
-  });
+Compactor.prototype._unlink = function(filenames, cb) {
+  async.forEach(filenames, fs.unlink, cb);
 }
 
-Compactor.prototype._handleEntry = function (entries, index, cb) {
+Compactor.prototype._handleEntries = function (entries, cb) {
   var self = this;
 
-  if (index === entries.length) {
-    return cb();
-  }
+  async.forEachSeries(
+    entries,
+    function (entry, done) {
+      self._handleEntry(entry, done);
+    },
+    cb
+  );
+}
 
-  var entry = entries[index];
+Compactor.prototype._handleEntry = function (entry, cb) {
+  var self = this;
+
   var outOfDate = self._outOfDate([self.db.keydir, self.delKeyDir], false, entry);
   if (outOfDate) {
-     // Use setImmediate to avoid "Maximum call stack size exceeded" if we're running
-     // compaction on multiple outdated entries
-     return setImmediate(function () {
-      self._handleEntry(entries, ++index, cb);
-    });
+    // Use setImmediate to avoid "Maximum call stack size exceeded" if we're running
+    // compaction on multiple outdated entries
+    return setImmediate(cb);
   }
 
   if (!utils.isTombstone(entry.value)) {
@@ -138,23 +135,30 @@ Compactor.prototype._handleEntry = function (entries, index, cb) {
     self.delKeyDir[entry.key] = newEntry;
 
     delete self.db.keydir[entry.key];
-    self._innerMergeWrite(entry, function () {
-      self._handleEntry(entries, ++index, cb);
-    });
+    self._innerMergeWrite(entry, cb);
   } else {
     if (self.delKeyDir[entry.key]) {
       delete self.delKeyDir[entry.key];
     }
 
-    self._innerMergeWrite(entry, function () {
-      self._handleEntry(entries, ++index, cb);
-    });
+    self._innerMergeWrite(entry, cb);
   }
 };
 
-Compactor.prototype._compactFile = function(files, index, cb) {
+Compactor.prototype._compactFiles = function (files, cb) {
   var self = this;
-  var file = files[index];
+
+  async.forEachSeries(
+    files,
+    function (file, done) {
+      self._compactFile(file, done);
+    },
+    cb
+  );
+}
+
+Compactor.prototype._compactFile = function(file, cb) {
+  var self = this;
   var parser = new DataFileParser(file);
   var entries = [];
   this.delKeyDir = [];
@@ -168,13 +172,7 @@ Compactor.prototype._compactFile = function(files, index, cb) {
   });
 
   parser.on('end', function() {
-    self._handleEntry(entries, 0, function () {
-      if (files.length === index + 1) {
-        cb(null);
-      } else {
-        self._compactFile(files, ++index, cb);
-      }
-    })
+    self._handleEntries(entries, cb);
   });
 
   parser.parse(cb);
