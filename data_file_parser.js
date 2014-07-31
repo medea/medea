@@ -30,8 +30,6 @@ DataFileParser.prototype.parse = function() {
   var state = 'findingHeader';
 
   stream.on('data', function(chunk) {
-    stream.pause();
-
     curlen = chunk.length;
 
     if (waiting.length) {
@@ -52,7 +50,6 @@ DataFileParser.prototype.parse = function() {
         waiting = chunk;
         chunk = new Buffer(0);
         curlen = 0;
-        stream.resume();
         return;
       }
 
@@ -60,7 +57,6 @@ DataFileParser.prototype.parse = function() {
         waiting = chunk;
         chunk = new Buffer(0);
         curlen = 0;
-        stream.resume();
         return;
       }
 
@@ -102,6 +98,5 @@ DataFileParser.prototype.parse = function() {
       }
     }
 
-    stream.resume();
   });
 };

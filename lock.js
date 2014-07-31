@@ -78,8 +78,6 @@ Lock.readActiveFile = function(dirname, type, cb) {
     stream.on('error', function(err) {
       cb(err);
     });
-
-    stream.resume();
   });
 };
 

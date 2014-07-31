@@ -137,17 +137,17 @@ DataFile.prototype._closeHintFile = function(cb) {
   var crcBuf = new Buffer(sizes.crc);
   this.hintCrc.copy(crcBuf, 0, 0, this.hintCrc.length);
 
-  var that = this;
+  var self = this;
   this.hintStream.write(crcBuf, function() {
-    fs.fsync(that.hintFd, function(err) {
+    fs.fsync(self.hintFd, function(err) {
       if (err) {
         //console.log('Error fsyncing hint file during close.', err);
         if (cb) cb(err);
         return;
       }
-      that.hintStream.end(function(err) {
-        that.hintFd = null;
-        that.hintCrc = new Buffer(sizes.crc);
+      self.hintStream.end(function(err) {
+        self.hintFd = null;
+        self.hintCrc = new Buffer(sizes.crc);
         if (cb) cb();
       });
     });

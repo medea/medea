@@ -32,8 +32,6 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
   var state = 'findingHeader';
 
   stream.on('data', function(chunk) {
-    stream.pause();
-
     curlen = chunk.length;
 
     if (waiting.length) {
@@ -50,7 +48,6 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
         waiting = chunk;
         chunk = new Buffer(0);
         curlen = 0;
-        stream.resume();
         return;
       }
 
@@ -64,7 +61,6 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
         chunk = new Buffer(0);
         curlen = 0;
         state = 'findingHeader';
-        stream.resume();
         return;
       }
 
@@ -72,7 +68,6 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
         waiting = chunk;
         chunk = new Buffer(0);
         curlen = 0;
-        stream.resume();
         return;
       }
 
@@ -125,9 +120,8 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
       }
     }
 
-    stream.resume();
   });
-  
+
   stream.on('end', function() {
     if (i === max) {
       cb1();
