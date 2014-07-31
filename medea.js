@@ -301,8 +301,6 @@ Medea.prototype._acquire = function(dir, type, cb) {
     stream.on('error', function(err) {
       cb(err);
     });
-
-    stream.resume();
   });
 };
 
