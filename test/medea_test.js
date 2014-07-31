@@ -319,9 +319,9 @@ describe('Medea#open() when there are empty hint & data-files', function () {
   before(function (done) {
     require('rimraf')(directory, function () {
       fs.mkdir(directory, function () {
-        fs.open(directory + '/0.medea.data', 'w', function (err, fd) {
+        fs.open(directory + '/4.medea.data', 'w', function (err, fd) {
           fs.close(fd, function () {
-            fs.open(directory + '/0.medea.hint', 'w', function (err, fd ) {
+            fs.open(directory + '/4.medea.hint', 'w', function (err, fd ) {
               fs.close(fd, function () {
                 db = medea({});
                 db.open(directory, done);
@@ -335,8 +335,8 @@ describe('Medea#open() when there are empty hint & data-files', function () {
 
   it('successfully remove the empty files', function (done) {
     fs.readdir(directory, function (err, files) {
-      assert.deepEqual(files.indexOf('0.medea.data'), -1)
-      assert.deepEqual(files.indexOf('0.medea.hint'), -1)
+      assert.deepEqual(files.indexOf('4.medea.data'), -1)
+      assert.deepEqual(files.indexOf('4.medea.hint'), -1)
       done()
     });
   });
