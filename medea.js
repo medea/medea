@@ -93,35 +93,15 @@ Medea.prototype.open = function(dir, options, cb) {
 
   var that = this;
   var scanFiles = function(cb) {
-    that._getReadableFiles(function(err, arr) {
-      var tasks = arr.map(function (f) {
-        return function (done) {
-          fs.open(f, 'r', function (err, fd) {
-            if (err) {
-              return done(err);
-            }
+    that._unlinkEmptyFiles(function (err) {
+      that._getReadableFiles(function(err, arr) {
+        that._openFiles(arr, function (err) {
+          if (err) {
+            return cb(err);
+          }
 
-            var readable = new DataFile();
-            readable.fd = fd;
-            readable.filename = f;
-            readable.dirname = that.dirname;
-
-            var filename = f.replace('\\', '/').split('/');
-            readable.timestamp = filename[filename.length - 1].split('.')[0];
-            readable.timestamp = Number(readable.timestamp);
-
-            that.readableFiles.push(readable);
-            done(null)
-          });
-        }
-      });
-
-      parallel(tasks, function (err) {
-        if (err) {
-          return cb(err);
-        }
-
-        that._scanKeyFiles(arr, cb);
+          that._scanKeyFiles(arr, cb);
+        });
       });
     });
   };
@@ -153,6 +133,70 @@ Medea.prototype.open = function(dir, options, cb) {
       next(dir, that.readOnly, cb);
     }
   });
+};
+
+Medea.prototype._unlinkEmptyFiles = function (cb) {
+
+  var that = this;
+
+  fs.readdir(this.dirname, function(err, files) {
+    if (err) {
+      return cb(err);
+    }
+
+    var tasks = files
+      .filter(function (f) {
+        return f.slice(-5) === '.hint';
+      })
+      .map(function (f) {
+        var filename = that.dirname + '/' + f;
+
+        return function (done) {
+          fs.stat(filename, function (err, stat) {
+            if (err || stat.size > 0) {
+              return done(err);
+            }
+
+            fs.unlink(filename.replace('.hint', '.data'), function (err) {
+              if (err) {
+                return done(err);
+              }
+
+              fs.unlink(filename, done);
+            });
+          });
+        }
+      });
+
+    parallel(tasks, cb);
+  });
+}
+
+Medea.prototype._openFiles = function (filenames, cb) {
+  var that = this;
+  var tasks = filenames.map(function (f) {
+    return function (done) {
+      fs.open(f, 'r', function (err, fd) {
+        if (err) {
+          return done(err);
+        }
+
+        var readable = new DataFile();
+        readable.fd = fd;
+        readable.filename = f;
+        readable.dirname = that.dirname;
+
+        var filename = f.replace('\\', '/').split('/');
+        readable.timestamp = filename[filename.length - 1].split('.')[0];
+        readable.timestamp = Number(readable.timestamp);
+
+        that.readableFiles.push(readable);
+        done(null)
+      });
+    }
+  });
+
+  parallel(tasks, cb)
 };
 
 Medea.prototype._scanKeyFiles = function(arr, cb) {
@@ -280,25 +324,11 @@ Medea.prototype._closeReadableFiles = function(cb) {
 Medea.prototype.close = function(cb) {
   var that = this;
   this.active.closeForWriting(function() {
-    if (that.active.offset === 0 && that.bytesToBeWritten === 0) {
-      fs.unlink(that.active.filename, function(err) {
-        fs.close(that.active.fd, function() {
-          fs.unlink(that.active.filename.replace('.data', '.hint'), function(err) {
-            fs.unlink(that.writeLock.filename, function(err) {
-              fs.close(that.writeLock.fd, function() {
-                that._closeReadableFiles(cb);
-              });
-            });
-          });
-        });
+    fs.unlink(that.writeLock.filename, function(err) {
+      fs.close(that.writeLock.fd, function() {
+        that._closeReadableFiles(cb);
       });
-    } else {
-      fs.unlink(that.writeLock.filename, function(err) {
-        fs.close(that.writeLock.fd, function() {
-          that._closeReadableFiles(cb);
-        });
-      });
-    }
+    });
   });
 };
 
