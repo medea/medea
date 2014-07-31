@@ -1,6 +1,8 @@
+var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
 var timestamp = require('monotonic-timestamp');
+var parallel = require('run-parallel');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -32,6 +34,8 @@ var writeCheck = constants.writeCheck;
 var Medea = function(options) {
   if (!(this instanceof Medea))
     return new Medea(options);
+
+  EventEmitter.call(this);
 
   this.active = null;
   this.keydir = {};
@@ -68,7 +72,10 @@ var Medea = function(options) {
   this.readableFiles = [];
   this.fileReferences = {};
   this.compactor = new Compactor(this);
+  this.setMaxListeners(Infinity);
 };
+
+require('util').inherits(Medea, EventEmitter);
 
 Medea.prototype.open = function(dir, options, cb) {
   if (typeof options === 'function') {
@@ -87,21 +94,34 @@ Medea.prototype.open = function(dir, options, cb) {
   var that = this;
   var scanFiles = function(cb) {
     that._getReadableFiles(function(err, arr) {
-      arr.forEach(function(f) {
-        var fd = fs.openSync(f, 'r');
-        var readable = new DataFile();
-        readable.fd = fd;
-        readable.filename = f;
-        readable.dirname = that.dirname;
+      var tasks = arr.map(function (f) {
+        return function (done) {
+          fs.open(f, 'r', function (err, fd) {
+            if (err) {
+              return done(err);
+            }
 
-        var filename = f.replace('\\', '/').split('/');
-        readable.timestamp = filename[filename.length - 1].split('.')[0];
-        readable.timestamp = Number(readable.timestamp);
+            var readable = new DataFile();
+            readable.fd = fd;
+            readable.filename = f;
+            readable.dirname = that.dirname;
 
-        that.readableFiles.push(readable);
+            var filename = f.replace('\\', '/').split('/');
+            readable.timestamp = filename[filename.length - 1].split('.')[0];
+            readable.timestamp = Number(readable.timestamp);
+
+            that.readableFiles.push(readable);
+            done(null)
+          });
+        }
       });
-      that._scanKeyFiles(arr, function() {
-        if (cb) cb();
+
+      parallel(tasks, function (err) {
+        if (err) {
+          return cb(err);
+        }
+
+        that._scanKeyFiles(arr, cb);
       });
     });
   };
@@ -244,11 +264,17 @@ Medea.prototype._acquire = function(dir, type, cb) {
 
 Medea.prototype._closeReadableFiles = function(cb) {
   var that = this;
-  this.readableFiles.forEach(function(f) {
-    if (f.fd !== that.active.fd) {
-      fs.closeSync(f.fd);
-    }
-  });
+  var tasks = this.readableFiles
+    .filter(function (file) {
+      return file.fd !== that.active.fd
+    })
+    .map(function (file) {
+      return function (done) {
+        fs.close(file.fd, done);
+      }
+    });
+
+  parallel(tasks, cb);
 };
 
 Medea.prototype.close = function(cb) {
@@ -260,8 +286,7 @@ Medea.prototype.close = function(cb) {
           fs.unlink(that.active.filename.replace('.data', '.hint'), function(err) {
             fs.unlink(that.writeLock.filename, function(err) {
               fs.close(that.writeLock.fd, function() {
-                that._closeReadableFiles();
-                if (cb) cb();
+                that._closeReadableFiles(cb);
               });
             });
           });
@@ -270,8 +295,7 @@ Medea.prototype.close = function(cb) {
     } else {
       fs.unlink(that.writeLock.filename, function(err) {
         fs.close(that.writeLock.fd, function() {
-          that._closeReadableFiles();
-          if (cb) cb();
+          that._closeReadableFiles(cb);
         });
       });
     }
@@ -288,56 +312,57 @@ Medea.prototype.put = function(k, v, cb) {
   }
 
   var bytesToBeWritten = sizes.header + k.length + v.length;
-  var file = this._getActiveFile(bytesToBeWritten);
 
   var that = this;
 
-  var key = k;
-  var value = v;
-  var ts = timestamp();
-  var lineBuffer = DataBuffer.fromKeyValuePair(key, value, ts);
+  this._getActiveFile(bytesToBeWritten, function (err, file) {
+    var key = k;
+    var value = v;
+    var ts = timestamp();
+    var lineBuffer = DataBuffer.fromKeyValuePair(key, value, ts);
 
-  file.write(lineBuffer, function(err) {
-    if (err) {
-      if (cb) cb(err);
-      return;
-    }
-
-    var oldOffset = file.offset;
-    file.offset += lineBuffer.length;
-
-    var totalSz = key.length + value.length + sizes.header;
-
-    var hintBufs = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
-
-    //timestamp
-    lineBuffer.copy(hintBufs, 0, headerOffsets.timestamp, headerOffsets.timestamp + sizes.timestamp);
-    //keysize
-    lineBuffer.copy(hintBufs, sizes.timestamp, headerOffsets.keysize, headerOffsets.keysize + sizes.keysize);
-    //total size
-    hintBufs.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
-    //offset
-    hintBufs.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
-    //key
-    k.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
-
-    file.writeHintFile(hintBufs, function(err) {
+    file.write(lineBuffer, function(err) {
       if (err) {
         if (cb) cb(err);
         return;
       }
-      file.hintCrc = crc32(hintBufs, file.hintCrc);
-      file.hintOffset += hintBufs.length;
 
-      var entry = new KeyDirEntry();
-      entry.fileId = file.timestamp;
-      entry.valueSize = value.length;
-      entry.valuePosition = oldOffset + sizes.header + key.length;
-      entry.timestamp = ts;
+      var oldOffset = file.offset;
+      file.offset += lineBuffer.length;
 
-      that.keydir[k] = entry;
+      var totalSz = key.length + value.length + sizes.header;
 
-      if (cb) cb();
+      var hintBufs = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
+
+      //timestamp
+      lineBuffer.copy(hintBufs, 0, headerOffsets.timestamp, headerOffsets.timestamp + sizes.timestamp);
+      //keysize
+      lineBuffer.copy(hintBufs, sizes.timestamp, headerOffsets.keysize, headerOffsets.keysize + sizes.keysize);
+      //total size
+      hintBufs.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
+      //offset
+      hintBufs.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
+      //key
+      k.copy(hintBufs, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
+
+      file.writeHintFile(hintBufs, function(err) {
+        if (err) {
+          if (cb) cb(err);
+          return;
+        }
+        file.hintCrc = crc32(hintBufs, file.hintCrc);
+        file.hintOffset += hintBufs.length;
+
+        var entry = new KeyDirEntry();
+        entry.fileId = file.timestamp;
+        entry.valueSize = value.length;
+        entry.valuePosition = oldOffset + sizes.header + key.length;
+        entry.timestamp = ts;
+
+        that.keydir[k] = entry;
+
+        if (cb) cb();
+      });
     });
   });
 };
@@ -363,120 +388,138 @@ Medea.prototype.write = function(batch, options, cb) {
   });
 
   var bytesToBeWritten = batchSize;
-  var file = this._getActiveFile(bytesToBeWritten);
   var that = this;
 
-  var lineBuffer = Buffer.concat(batchBuffers, batch.size);
+  this._getActiveFile(bytesToBeWritten, function (err, file) {
+    var lineBuffer = Buffer.concat(batchBuffers, batch.size);
 
-  file.write(lineBuffer, { sync: options.sync }, function(err) {
-    if (err) {
-      if (cb) cb(err);
-      return;
-    }
-
-    var oldOffset = file.offset;
-    file.offset += lineBuffer.length;
-
-    var dataEntries = batchBuffers.map(function(buffer) {
-      return DataEntry.fromBuffer(buffer);
-    });
-    var hintBufs = [];
-    var hintBufsSize = 0;
-    var newHintCrc = file.hintCrc;
-    var keydirDelta = {};
-
-    var copyBufferOffset = 0;
-
-    dataEntries.forEach(function(dataEntry) {
-      var key = dataEntry.key;
-      var value = dataEntry.value;
-
-      var totalSz = dataEntry.keySize + dataEntry.valueSize + sizes.header;
-
-      var hintBuf = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
-
-      //timestamp
-      lineBuffer.copy(hintBuf, 0,
-        copyBufferOffset + headerOffsets.timestamp,
-        copyBufferOffset + headerOffsets.timestamp + sizes.timestamp);
-
-      //keysize
-      lineBuffer.copy(hintBuf, sizes.timestamp,
-        copyBufferOffset + headerOffsets.keysize,
-        copyBufferOffset + headerOffsets.keysize + sizes.keysize);
-
-      //total size
-      hintBuf.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
-      //offset
-      hintBuf.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
-      //key
-      key.copy(hintBuf, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
-
-      hintBufsSize += hintBuf.length;
-      hintBufs.push(hintBuf);
-      newHintCrc = crc32(hintBuf, newHintCrc);
-      
-      var entry = new KeyDirEntry();
-      entry.fileId = file.timestamp;
-      entry.valueSize = value.length;
-      entry.valuePosition = oldOffset + sizes.header + key.length;
-      entry.timestamp = dataEntry.timestamp;
-
-      keydirDelta[key] = entry;
-
-      oldOffset += dataEntry.buffer.length;
-      copyBufferOffset += dataEntry.buffer.length;
-    });
-
-    var hintBuffersToBeWritten = Buffer.concat(hintBufs, hintBufsSize);
-    file.writeHintFile(hintBuffersToBeWritten, function(err) {
+    file.write(lineBuffer, { sync: options.sync }, function(err) {
       if (err) {
         if (cb) cb(err);
         return;
       }
 
-      file.hintCrc = newHintCrc;
-      file.hintOffset += hintBufsSize;
+      var oldOffset = file.offset;
+      file.offset += lineBuffer.length;
 
-      batch.operations.forEach(function (operation) {
-        var key = operation.entry.key.toString();
+      var dataEntries = batchBuffers.map(function(buffer) {
+        return DataEntry.fromBuffer(buffer);
+      });
+      var hintBufs = [];
+      var hintBufsSize = 0;
+      var newHintCrc = file.hintCrc;
+      var keydirDelta = {};
 
-        if (operation.type === 'remove') {
-          delete that.keydir[key];
-        } else {
-          that.keydir[key] = keydirDelta[key];
+      var copyBufferOffset = 0;
+
+      dataEntries.forEach(function(dataEntry) {
+        var key = dataEntry.key;
+        var value = dataEntry.value;
+
+        var totalSz = dataEntry.keySize + dataEntry.valueSize + sizes.header;
+
+        var hintBuf = new Buffer(sizes.timestamp + sizes.keysize + sizes.offset + sizes.totalsize + key.length)
+
+        //timestamp
+        lineBuffer.copy(hintBuf, 0,
+          copyBufferOffset + headerOffsets.timestamp,
+          copyBufferOffset + headerOffsets.timestamp + sizes.timestamp);
+
+        //keysize
+        lineBuffer.copy(hintBuf, sizes.timestamp,
+          copyBufferOffset + headerOffsets.keysize,
+          copyBufferOffset + headerOffsets.keysize + sizes.keysize);
+
+        //total size
+        hintBuf.writeUInt32BE(totalSz, sizes.timestamp + sizes.keysize);
+        //offset
+        hintBuf.writeDoubleBE(oldOffset, sizes.timestamp + sizes.keysize + sizes.totalsize);
+        //key
+        key.copy(hintBuf, sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset);
+
+        hintBufsSize += hintBuf.length;
+        hintBufs.push(hintBuf);
+        newHintCrc = crc32(hintBuf, newHintCrc);
+        
+        var entry = new KeyDirEntry();
+        entry.fileId = file.timestamp;
+        entry.valueSize = value.length;
+        entry.valuePosition = oldOffset + sizes.header + key.length;
+        entry.timestamp = dataEntry.timestamp;
+
+        keydirDelta[key] = entry;
+
+        oldOffset += dataEntry.buffer.length;
+        copyBufferOffset += dataEntry.buffer.length;
+      });
+
+      var hintBuffersToBeWritten = Buffer.concat(hintBufs, hintBufsSize);
+      file.writeHintFile(hintBuffersToBeWritten, function(err) {
+        if (err) {
+          if (cb) cb(err);
+          return;
         }
-      })
 
-      if (cb) cb();
+        file.hintCrc = newHintCrc;
+        file.hintOffset += hintBufsSize;
+
+        batch.operations.forEach(function (operation) {
+          var key = operation.entry.key.toString();
+
+          if (operation.type === 'remove') {
+            delete that.keydir[key];
+          } else {
+            that.keydir[key] = keydirDelta[key];
+          }
+        })
+
+        if (cb) cb();
+      });
     });
   });
 };
 
-Medea.prototype._getActiveFile = function (bytesToBeWritten) {
-  var active;
+Medea.prototype._getActiveFile = function (bytesToBeWritten, cb) {
+  var that = this;
 
-  if (this.bytesToBeWritten + bytesToBeWritten < this.maxFileSize)
-    active = this.active
-  else
-    active = this._wrapWriteFileSync()
+  if (this.bytesToBeWritten + bytesToBeWritten < this.maxFileSize) {
+    this.bytesToBeWritten += bytesToBeWritten;
+    cb(null, this.active);
+  } else {
+    this.once('newActiveFile', function () {
+      that._getActiveFile(bytesToBeWritten, cb);
+    });
 
-  this.bytesToBeWritten += bytesToBeWritten;
-  return active;
+    if (!this.gettingNewActiveFile) {
+      this.gettingNewActiveFile = true;
+      that._wrapWriteFile(function () {
+        that.gettingNewActiveFile = false;
+        that.emit('newActiveFile');
+      });
+    }
+  }
 }
 
-Medea.prototype._wrapWriteFileSync = function() {
+Medea.prototype._wrapWriteFile = function (cb) {
   var oldFile = this.active;
-  var file = DataFile.createSync(this.dirname);
+  var that = this;
+  DataFile.create(this.dirname, function (err, file) {
+    if (err) {
+      return cb(err);
+    }
 
-  this.writeLock.writeActiveFileSync(this.dirname, file);
-  this.active = file;
-  this.readableFiles.push(file);
-  oldFile.closeForWritingSync();
-  this.bytesToBeWritten = 0;
+    that.writeLock.writeActiveFile(that.dirname, file, function (err) {
+      if (err) {
+        return cb(err);
+      }
 
-  return file;
-};
+      that.active = file;
+      that.readableFiles.push(file);
+      that.bytesToBeWritten = 0;
+      oldFile.closeForWriting(cb);
+    });
+  });
+}
 
 Medea.prototype.get = function(key, snapshot, cb) {
   if (!cb) {
@@ -554,13 +597,13 @@ Medea.prototype.sync = function(file, cb) {
   }
 
   var that = this;
-  fs.fsync(file.fd, function(err) {
+  fs.fsync(file.dataStream.fd, function(err) {
     if (err) {
       cb(err);
       return;
     }
 
-    fs.fsync(file.hintFd, cb);
+    fs.fsync(file.hintStream.fd, cb);
   });
 };
 

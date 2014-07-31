@@ -15,6 +15,8 @@ describe('DataFile', function() {
         assert(file.dirname, directory);
         assert(!!file.fd);
         assert(!!file.hintFd);
+        assert(!!file.hintStream);
+        assert(!!file.dataStream);
         assert(!!file.filename);
 
         done();
@@ -23,8 +25,10 @@ describe('DataFile', function() {
 
     it('elevates data file open errors', function(done) {
       var coreOpen = fs.open;
-      fs.open = function(filename, mode, cb) {
-        cb(new Error('OHNOES!'));
+      fs.open = function(filename, flag, mode, cb) {
+        setImmediate(function () {
+          cb(new Error('OHNOES!'));
+        });
       };
       DataFile.create(directory, function(err, file) {
         assert.equal(err.message, 'OHNOES!');
@@ -36,10 +40,12 @@ describe('DataFile', function() {
     it('elevates hint file open errors', function(done) {
       var coreOpen = fs.open;
       var counter = 0;
-      fs.open = function(filename, mode, cb) {
+      fs.open = function(filename, flag, mode, cb) {
         counter++;
         if (counter === 2) {
-          cb(new Error('OHNOES!'));
+          setImmediate(function () {
+            cb(new Error('OHNOES!'));
+          });
         } else {
           coreOpen(filename, mode, cb);
         }
@@ -49,16 +55,6 @@ describe('DataFile', function() {
         fs.open = coreOpen;
         done();
       });
-    });
-  });
-
-  describe('.createSync', function() {
-    it('creates a data file synchronously', function() {
-      var file = DataFile.createSync(directory);
-      assert(file.dirname, directory);
-      assert(!!file.fd);
-      assert(!!file.hintFd);
-      assert(!!file.filename);
     });
   });
 
@@ -83,15 +79,6 @@ describe('DataFile', function() {
           done();
         });
       });
-    });
-  });
-
-  describe('#writeSync', function() {
-    it('writes buffers synchronously', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('soup');
-      var ret = file.writeSync(buf);
-      assert(!!ret);
     });
   });
 
@@ -189,46 +176,6 @@ describe('DataFile', function() {
           });
         });
       });
-    });
-  });
-
-  describe('#closeForWritingSync', function() {
-    it('closes the file when data has been written', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('hotdogmania');
-      file.writeSync(buf);
-      file.offset = buf.length;
-      file.closeForWritingSync();
-
-      assert.equal(file.hintFd, null);
-    });
-
-    it('closes the file when data has not been written', function() {
-      var file = DataFile.createSync(directory);
-      file.closeForWritingSync();
-      assert.equal(file.hintFd, null);
-    });
-
-    it('completes the operation even if the file is readonly', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('hotdogmania');
-      file.writeSync(buf);
-      file.offset = buf.length;
-      file.readOnly = true;
-      file.closeForWritingSync();
-
-      assert(!!file.hintFd);
-    });
-
-    it('handles overlapping close operations', function() {
-      var file = DataFile.createSync(directory);
-      var buf = new Buffer('hotdogmania');
-      file.writeSync(buf);
-      file.offset = buf.length;
-      file.closeForWritingSync();
-      file.closeForWritingSync();
-
-      assert(!file.hintFd);
     });
   });
 });

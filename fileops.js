@@ -2,24 +2,6 @@ var fs = require('fs');
 var constants = require('./constants');
 var sizes = constants.sizes;
 
-exports.open = function(file, cb) {
-  fs.open(file.filename, 'a+', function(err, value) {
-    if (err) {
-      cb(err);
-      return;
-    }
-
-    file.fd = value;
-    cb(null, file);
-  });
-};
-
-exports.openSync = function(file) {
-  var fd = fs.openSync(file.filename, 'a+');
-  file.fd = fd;
-  return file;
-};
-
 exports.ensureDir = function(dir, cb) {
   fs.stat(dir, function(err, stat) {
     if (!stat) {
@@ -56,20 +38,6 @@ var dataFileTstamps = exports.dataFileTstamps = function(dirname, cb) {
   });
 };
 
-var dataFileTstampsSync = exports.dataFileTstampsSync = function(dirname) {
-  var files = fs.readdirSync(dirname);
-  var tstamps = [];
-
-  files.forEach(function(file) {
-    var match = file.match(/^([0-9]+).medea.data/);
-    if (match && match.length && match[1]) {
-      tstamps.push(Number(match[1]));
-    }
-  }); 
-    
-  return tstamps;
-};
-
 exports.mostRecentTstamp = function(dirname, cb) {
   dataFileTstamps(dirname, function(err, stamps) {
     if (err) {
@@ -87,19 +55,6 @@ exports.mostRecentTstamp = function(dirname, cb) {
       cb(null, 0);
     }
   });
-};
-
-exports.mostRecentTstampSync = function(dirname) {
-  var stamps = dataFileTstampsSync(dirname);
-  if (stamps.length) {
-    return stamps.sort(function(a, b) {
-      if (a > b) return -1;
-      if (a < b) return 1;
-      return 0;
-    })[0];
-  } else {
-    return 0;
-  }
 };
 
 exports.listDataFiles = function(dirname, writeFile, mergeFile, cb) {
