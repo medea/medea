@@ -41,7 +41,7 @@ exports.mostRecentTstamp = function(dirname, cb) {
   });
 };
 
-exports.listDataFiles = function(dirname, writeFile, mergeFile, cb) {
+exports.listDataFiles = function(dirname, cb) {
   dataFileTstamps(dirname, function(err, tstamps) {
     if (err) {
       cb(err);
@@ -52,16 +52,6 @@ exports.listDataFiles = function(dirname, writeFile, mergeFile, cb) {
       if (a > b) return -1;
       if (a < b) return 1;
       return 0;
-    });
-
-    [writeFile, mergeFile].forEach(function(f) {
-      if (f) {
-        var n = f.replace('.medea.data', '');
-        var index = sorted.indexOf(n);
-        if (index !== -1) {
-          delete sorted[index];
-        }
-      }
     });
 
     var ret = sorted.map(function(t) {

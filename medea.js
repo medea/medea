@@ -1,6 +1,7 @@
 var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 var crc32 = require('buffer-crc32');
+var lockFile = require('lockfile');
 var timestamp = require('monotonic-timestamp');
 var async = require('async');
 var unlinkEmptyFiles = require('unlink-empty-files');
@@ -13,7 +14,6 @@ var Compactor = require('./compactor');
 var DataFile = require('./data_file');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
-var Lock = require('./lock');
 var MapReduce = require('./map_reduce');
 var WriteBatch = require('./write_batch');
 var Snapshot = require('./snapshot');
@@ -94,43 +94,39 @@ Medea.prototype.open = function(dir, options, cb) {
 
   var self = this;
 
-  require('mkdirp')(dir, function(err) {
-    if (err) {
-      return cb(err);
-    }
-
-    self._scanFiles(function (err) {
-      if (err) {
-        return cb(err);
-      }
-
-      if (self.readOnly) {
-        return cb();
-      }
-
-      self._acquire(self.dirname, 'write', function(err, writeLock) {
-        if (err) {
-          return cb(err);
+  async.series(
+    [
+      function (done) {
+        require('mkdirp')(dir, done);
+      },
+      function (done) {
+        lockFile.lock(dir + '/medea.lock', done);
+      },
+      function (done) {
+        self._scanFiles(done);
+      },
+      function (done) {
+        if (self.readOnly) {
+          cb()
+        } else {
+          done();
         }
-
-        DataFile.create(self.dirname, function(err, file) {
+      },
+      function (done) {
+        DataFile.create(self.dirname, function (err, file) {
           if (err) {
-            return cb(err);
+            return done(err);
           }
 
-          writeLock.writeActiveFile(self.dirname, file, function(err) {
-            if (err) {
-              return cb(err);
-            }
+          self.active = file;
+          self.readableFiles.push(self.active);
 
-            self.active = file;
-            self.readableFiles.push(self.active);
-            cb();
-          });
+          done();
         });
-      });
-    });
-  });
+      }
+    ],
+    cb
+  );
 };
 
 Medea.prototype._scanFiles = function (cb) {
@@ -142,7 +138,7 @@ Medea.prototype._scanFiles = function (cb) {
       return cb(err);
     }
 
-    self._getReadableFiles(function(err, arr) {
+    fileops.listDataFiles(self.dirname, function(err, arr) {
 
       if (err) {
         return cb(err);
@@ -200,107 +196,6 @@ Medea.prototype._scanKeyFiles = function(arr, cb) {
   HintFileParser.parse(this.dirname, arr, this.keydir, cb);
 };
 
-Medea.prototype._getReadableFiles = function(cb) {
-  var self = this;
-  Lock.readActiveFile(this.dirname, 'write', function(err, writeFile) {
-    Lock.readActiveFile(self.dirname, 'merge', function(err, mergeFile) {
-      // TODO: Filter out files marked for deletion by successful merge.
-      fileops.listDataFiles(self.dirname, writeFile, mergeFile, function(err, files) {
-        cb(null, files);
-      });
-    });
-  });
-};
-
-
-Medea.prototype._acquire = function(dir, type, cb) {
-  var filename = dir + '/medea.' + type + '.lock';
-
-  var self = this;
-  var writeFile = function() {
-    Lock.acquire(filename, true, function(err, writeLock) {
-      if (err) {
-        console.log('Error on acquiring write lock.', err);
-      }
-      self.writeLock = writeLock;
-      self.writeLock.writeActiveFile(self.dirname, null, function(err) {
-        if (err) {
-          console.log('Error on writing active file:', err);
-        }
-        cb(null, writeLock);
-      });
-    });
-  };
-
-  var bufs = [];
-  var len = 0;
-  var ondata = function(data) {
-    bufs.push(data);
-    len += data.length;
-  };
-
-  var onend = function(fd) {
-    return function() {
-      var contents = new Buffer(len);
-      var i = 0;
-      bufs.forEach(function(buf) {
-        buf.copy(contents, i, 0, buf.length);
-        i += buf.length;
-      });
-
-      var c = contents.toString().split(' ');
-
-      if (c.length && c[0].length) {
-        var pid = c[0];
-        var fname;
-        if (c[1] && c[1].length && c[1] !== '\n') {
-          fname = c[1];
-        }
-
-        if (pid == process.pid) {
-          cb(null, self.writeLock);
-        } else {
-          fs.unlink(filename, function(err) {
-            if (err) {
-              cb(err);
-              return;
-            }
-            self._acquire(dir, type, cb);
-            return;
-          });
-        }
-      } else {
-        fs.close(fd, function(err) {
-          if (err) {
-          }
-          writeFile();
-        });
-      }
-    };
-  };
-
-  Lock.acquire(filename, false, function(err, writeLock) {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        // this is okay.  move on.
-        writeFile();
-        return;
-      }
-      cb(err);
-      return;
-    }
-
-    this.writeLock = writeLock;
-
-    var stream = fs.createReadStream(filename, { fd: writeLock.fd });
-    stream.on('data', ondata);
-    stream.on('end', onend(writeLock.fd));
-    stream.on('error', function(err) {
-      cb(err);
-    });
-  });
-};
-
 Medea.prototype._closeReadableFiles = function(cb) {
   var self = this;
   var tasks = this.readableFiles
@@ -318,11 +213,10 @@ Medea.prototype._closeReadableFiles = function(cb) {
 
 Medea.prototype.close = function(cb) {
   var self = this;
+
   this.active.closeForWriting(function() {
-    fs.unlink(self.writeLock.filename, function(err) {
-      fs.close(self.writeLock.fd, function() {
-        self._closeReadableFiles(cb);
-      });
+    lockFile.unlock(self.dirname + '/medea.lock', function () {
+      self._closeReadableFiles(cb);
     });
   });
 };
@@ -533,16 +427,10 @@ Medea.prototype._wrapWriteFile = function (cb) {
       return cb(err);
     }
 
-    self.writeLock.writeActiveFile(self.dirname, file, function (err) {
-      if (err) {
-        return cb(err);
-      }
-
-      self.active = file;
-      self.readableFiles.push(file);
-      self.bytesToBeWritten = 0;
-      oldFile.closeForWriting(cb);
-    });
+    self.active = file;
+    self.readableFiles.push(file);
+    self.bytesToBeWritten = 0;
+    oldFile.closeForWriting(cb);
   });
 }
 
