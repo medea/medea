@@ -352,5 +352,24 @@ describe('Medea#open() and then directly #close()', function () {
     db.open(directory, function(err) {
       db.close(done)
     });
-  })
-})
+  });
+});
+
+describe('Medea#open on already opened directory', function () {
+  before(function (done) {
+    db = medea({});
+    db.open(directory, done);
+  });
+
+  it('should error', function (done) {
+    var db2 = medea({});
+    db2.open(directory, function (err) {
+      assert(err);
+      done();
+    });
+  });
+
+  after(function (done) {
+    db.close(done);
+  });
+});
