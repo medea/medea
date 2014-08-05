@@ -5,8 +5,9 @@ var DataFile = require('../data_file');
 var directory = __dirname + '/tmp/data_file_test';
 
 describe('DataFile', function() {
-  before(function (done) {
-    require('rimraf')(directory, done);
+  before(function () {
+    require('rimraf').sync(directory);
+    require('mkdirp').sync(directory);
   });
 
   describe('.create', function() {

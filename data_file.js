@@ -1,6 +1,6 @@
 var fs = require('fs');
 var appendStream = require('append-stream');
-var parallel = require('run-parallel');
+var parallel = require('async').parallel;
 var constants = require('./constants');
 var fileops = require('./fileops');
 var sizes = constants.sizes;
@@ -21,56 +21,54 @@ var DataFile = module.exports = function() {
 };
 
 DataFile.create = function(dirname, cb) {
-  fileops.ensureDir(dirname, function(err) {
-    fileops.mostRecentTstamp(dirname, function(err, stamp) {
-      stamp = stamp + 1;
-      var filename = dirname + '/' + stamp + '.medea.data';
-      var file = new DataFile();
-      file.filename = filename;
-      file.dirname = dirname;
-      file.readOnly = false;
-      file.timestamp = stamp;
+  fileops.mostRecentTstamp(dirname, function(err, stamp) {
+    stamp = stamp + 1;
+    var filename = dirname + '/' + stamp + '.medea.data';
+    var file = new DataFile();
+    file.filename = filename;
+    file.dirname = dirname;
+    file.readOnly = false;
+    file.timestamp = stamp;
 
-      var hintFilename = dirname + '/' + stamp + '.medea.hint';
+    var hintFilename = dirname + '/' + stamp + '.medea.hint';
 
-      parallel({
-          dataStream: function (done) {
-            appendStream(filename, done);
-          },
-          hintStream: function (done) {
-            appendStream(hintFilename, done);
-          }
+    parallel({
+        dataStream: function (done) {
+          appendStream(filename, done);
         },
-        function (err, results) {
-          if (err) {
-            return cb(err);
-          }
-
-          file.dataStream = results.dataStream;
-          file.hintStream = results.hintStream;
-
-          parallel({
-              dataFd: function (done) {
-                fs.open(file.filename, 'r', done);
-              },
-              hintFd: function (done) {
-                fs.open(hintFilename, 'r', done);
-              }
-            },
-            function (err, results) {
-              if (err) {
-                return cb(err);
-              }
-
-              file.fd = results.dataFd;
-              file.hintFd = results.hintFd;
-
-              cb(null, file);
-            }
-          ); 
+        hintStream: function (done) {
+          appendStream(hintFilename, done);
         }
-      );
-    });
+      },
+      function (err, results) {
+        if (err) {
+          return cb(err);
+        }
+
+        file.dataStream = results.dataStream;
+        file.hintStream = results.hintStream;
+
+        parallel({
+            dataFd: function (done) {
+              fs.open(file.filename, 'r', done);
+            },
+            hintFd: function (done) {
+              fs.open(hintFilename, 'r', done);
+            }
+          },
+          function (err, results) {
+            if (err) {
+              return cb(err);
+            }
+
+            file.fd = results.dataFd;
+            file.hintFd = results.hintFd;
+
+            cb(null, file);
+          }
+        ); 
+      }
+    );
   });
 };
 
@@ -132,13 +130,9 @@ DataFile.prototype._closeHintFile = function(cb) {
   }
 
   this.closingHintFile = true;
-  var hintFilename = this.dirname + '/' + this.timestamp + '.medea.hint';
-  
-  var crcBuf = new Buffer(sizes.crc);
-  this.hintCrc.copy(crcBuf, 0, 0, this.hintCrc.length);
 
   var self = this;
-  this.hintStream.write(crcBuf, function() {
+  this.hintStream.write(this.hintCrc, function() {
     fs.fsync(self.hintFd, function(err) {
       if (err) {
         //console.log('Error fsyncing hint file during close.', err);
