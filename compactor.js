@@ -67,35 +67,16 @@ Compactor.prototype.compact = function (cb) {
         return;
       }
 
-      var dataFileNames = files.map(function(f) {
-        return f.filename;
-      });
-
-      var hintFileNames = files.map(function(f) {
-        return f.filename.replace('.data', '.hint');
-      });
-
       self.db.sync(self.activeMerge, function(err) {
         if (err) {
           if (cb) cb(err);
           return;
         }
 
-        self._unlink(dataFileNames.concat(hintFileNames), function(err) {
-          if (err) {
-            if (cb) cb(err);
-            return;
-          }
-
-          if (cb) cb();
-        });
+        if (cb) cb();
       });
     });
   });
-}
-
-Compactor.prototype._unlink = function(filenames, cb) {
-  async.forEach(filenames, fs.unlink, cb);
 }
 
 Compactor.prototype._handleEntries = function (entries, cb) {
@@ -174,7 +155,14 @@ Compactor.prototype._compactFile = function(file, cb) {
 
       var index = self.db.readableFiles.indexOf(file);
       self.db.readableFiles.splice(index, 1)
-      cb(null)
+
+      fs.unlink(file.filename, function (err) {
+        if (err) {
+          return cb(err);
+        }
+
+        fs.unlink(file.filename.replace('.data', '.hint'), cb);
+      });
     });
   });
 
