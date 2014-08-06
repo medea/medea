@@ -52,29 +52,24 @@ Compactor.prototype.compact = function (cb) {
     return cb();
   }
 
-  DataFile.create(this.db.dirname, function (err, file) {
-    if (err) {
-      return cb(err);
+  // activeMerge === null means that when _getActiveMerge is called a new
+  // merge file will be created
+  this.activeMerge = null;
+
+  this._compactFiles(files, function(err) {
+    if (err || !self.activeMerge) {
+      cb(err);
+      return;
     }
 
-    self.activeMerge = file;
+    self.db.sync(self.activeMerge, function(err) {
 
-    self.db.readableFiles.push(self.activeMerge)
-
-    self._compactFiles(files, function(err) {
       if (err) {
-        cb(err);
+        if (cb) cb(err);
         return;
       }
 
-      self.db.sync(self.activeMerge, function(err) {
-        if (err) {
-          if (cb) cb(err);
-          return;
-        }
-
-        if (cb) cb();
-      });
+      if (cb) cb();
     });
   });
 }
@@ -209,7 +204,7 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
 Compactor.prototype._getActiveMerge = function (bytesToBeWritten, cb) {
   var self = this;
 
-  if (this.bytesToBeWritten + bytesToBeWritten < this.db.maxFileSize) {
+  if (this.activeMerge && this.bytesToBeWritten + bytesToBeWritten < this.db.maxFileSize) {
     this.bytesToBeWritten += bytesToBeWritten;
     cb(null, this.activeMerge);
   } else {
@@ -239,7 +234,10 @@ Compactor.prototype._wrapWriteFile = function(cb) {
     self.activeMerge = file;
     self.db.readableFiles.push(file);
     self.bytesToBeWritten = 0;
-    oldFile.closeForWriting(cb);
+    if (oldFile)
+      oldFile.closeForWriting(cb);
+    else
+      cb();
   });
 };
 
