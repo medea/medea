@@ -81,11 +81,6 @@ Compactor.prototype.compact = function (cb) {
           return;
         }
 
-        self.db.readableFiles = self.db.readableFiles
-          .filter(function (file) {
-            return files.indexOf(file) === -1;
-          });
-
         self._unlink(dataFileNames.concat(hintFileNames), function(err) {
           if (err) {
             if (cb) cb(err);
@@ -172,7 +167,15 @@ Compactor.prototype._compactFile = function(file, cb) {
   });
 
   parser.on('end', function() {
-    self._handleEntries(entries, cb);
+    self._handleEntries(entries, function (err) {
+      if (err) {
+        return cb(err);
+      }
+
+      var index = self.db.readableFiles.indexOf(file);
+      self.db.readableFiles.splice(index, 1)
+      cb(null)
+    });
   });
 
   parser.parse(cb);
