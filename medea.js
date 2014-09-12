@@ -413,7 +413,7 @@ Medea.prototype._getActiveFile = function (bytesToBeWritten, cb) {
   var self = this;
 
   if (!this.active) {
-    return cb(new Error('Database is not opened correctly'));
+    return cb(new Error('Database not open'));
   }
 
   if (this.bytesToBeWritten + bytesToBeWritten < this.maxFileSize) {
@@ -464,7 +464,7 @@ Medea.prototype.get = function(key, snapshot, cb) {
   }
 
   if (!this.active) {
-    return cb(new Error('Database is not opened correctly'));
+    return cb(new Error('Database not open'));
   }
 
   var entry = snapshot ? snapshot.keydir[key] : this.keydir[key];
@@ -524,7 +524,7 @@ Medea.prototype.listKeys = function(cb) {
 
 Medea.prototype.createSnapshot = function () {
   if (!this.active) {
-    throw new Error('Database is not opened correctly');
+    throw new Error('Database not open');
   }
 
   return new Snapshot(this);
@@ -537,7 +537,7 @@ Medea.prototype.sync = function(file, cb) {
   }
 
   if (!file) {
-    return cb(new Error('Database is not opened correctly'));
+    return cb(new Error('Database not open'));
   }
 
   fs.fsync(file.dataStream.fd, function(err) {
@@ -552,7 +552,7 @@ Medea.prototype.sync = function(file, cb) {
 
 Medea.prototype.compact = function(cb) {
   if (!this.active) {
-    return cb(new Error('Database is not opened correctly'));
+    return cb(new Error('Database not open'));
   }
 
   this.compactor.compact(cb);
@@ -560,7 +560,7 @@ Medea.prototype.compact = function(cb) {
 
 Medea.prototype.mapReduce = function(options, cb) {
   if (!this.active) {
-    return cb(new Error('Database is not opened correctly'));
+    return cb(new Error('Database not open'));
   }
 
   var job = new MapReduce(this, options);
