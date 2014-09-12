@@ -48,6 +48,22 @@ var runTests = function (db) {
       done();
     });
   });
+
+  it('#sync should error', function (done) {
+    db.sync(function (err) {
+      assert(err instanceof Error);
+      done();
+    });
+  });
+
+  it('#mapReduce should error', function (done) {
+    var options = { map: function () {}, reduce: function() {} };
+
+    db.mapReduce(options, function (err) {
+      assert(err instanceof Error);
+      done();
+    });
+  });
 };
 
 describe('Medea an not opened db', function() {

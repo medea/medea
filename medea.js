@@ -536,6 +536,10 @@ Medea.prototype.sync = function(file, cb) {
     file = this.active;
   }
 
+  if (!file) {
+    return cb(new Error('Database is not opened correctly'));
+  }
+
   fs.fsync(file.dataStream.fd, function(err) {
     if (err) {
       cb(err);
@@ -555,6 +559,10 @@ Medea.prototype.compact = function(cb) {
 };
 
 Medea.prototype.mapReduce = function(options, cb) {
+  if (!this.active) {
+    return cb(new Error('Database is not opened correctly'));
+  }
+
   var job = new MapReduce(this, options);
   job.run(cb);
 };
