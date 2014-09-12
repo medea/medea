@@ -48,7 +48,7 @@ var Medea = function(options) {
 
   this.mergeWindow = options.hasOwnProperty('mergeWindow')
     ? options.mergeWindow : 'always';
-  
+
   this.fragMergeTrigger = options.hasOwnProperty('fragMergeTrigger')
     ? options.fragMergeTrigger : 60; // fragmentation >= 60%
 
@@ -216,7 +216,10 @@ Medea.prototype.close = function(cb) {
 
   this.active.closeForWriting(function() {
     lockFile.unlock(self.dirname + '/medea.lock', function () {
-      self._closeReadableFiles(cb);
+      self._closeReadableFiles(function () {
+        self.active = null;
+        cb();
+      });
     });
   });
 };
@@ -235,6 +238,10 @@ Medea.prototype.put = function(k, v, cb) {
   var self = this;
 
   this._getActiveFile(bytesToBeWritten, function (err, file) {
+    if (err) {
+      return cb(err);
+    }
+
     var key = k;
     var value = v;
     var ts = timestamp();
@@ -310,6 +317,10 @@ Medea.prototype.write = function(batch, options, cb) {
   var self = this;
 
   this._getActiveFile(bytesToBeWritten, function (err, file) {
+    if (err) {
+      return cb(err);
+    }
+
     var lineBuffer = Buffer.concat(batchBuffers, batch.size);
 
     file.write(lineBuffer, { sync: options.sync }, function(err) {
@@ -401,19 +412,27 @@ Medea.prototype.write = function(batch, options, cb) {
 Medea.prototype._getActiveFile = function (bytesToBeWritten, cb) {
   var self = this;
 
+  if (!this.active) {
+    return cb(new Error('Database not open'));
+  }
+
   if (this.bytesToBeWritten + bytesToBeWritten < this.maxFileSize) {
     this.bytesToBeWritten += bytesToBeWritten;
     cb(null, this.active);
   } else {
-    this.once('newActiveFile', function () {
+    this.once('newActiveFile', function (err) {
+      if (err) {
+        return cb(err);
+      }
+
       self._getActiveFile(bytesToBeWritten, cb);
     });
 
     if (!this.gettingNewActiveFile) {
       this.gettingNewActiveFile = true;
-      self._wrapWriteFile(function () {
+      self._wrapWriteFile(function (err) {
         self.gettingNewActiveFile = false;
-        self.emit('newActiveFile');
+        self.emit('newActiveFile', err);
       });
     }
   }
@@ -440,8 +459,13 @@ Medea.prototype.get = function(key, snapshot, cb) {
     snapshot = undefined;
   }
 
-  if (snapshot && snapshot.closed)
+  if (snapshot && snapshot.closed) {
     return cb(new Error('Snapshot is closed'));
+  }
+
+  if (!this.active) {
+    return cb(new Error('Database not open'));
+  }
 
   var entry = snapshot ? snapshot.keydir[key] : this.keydir[key];
   if (!entry) {
@@ -479,13 +503,12 @@ Medea.prototype.get = function(key, snapshot, cb) {
 Medea.prototype.remove = function(key, cb) {
   var self = this;
   this.put(key, tombstone, function(err) {
-    if (self.keydir[key]) {
-      delete self.keydir[key];
-    }
-
     if (err) {
       if (cb) cb(err);
     } else {
+      if (self.keydir[key]) {
+        delete self.keydir[key];
+      }
       if(cb) cb();
     }
   });
@@ -500,6 +523,10 @@ Medea.prototype.listKeys = function(cb) {
 };
 
 Medea.prototype.createSnapshot = function () {
+  if (!this.active) {
+    throw new Error('Database not open');
+  }
+
   return new Snapshot(this);
 }
 
@@ -507,6 +534,10 @@ Medea.prototype.sync = function(file, cb) {
   if (!cb && typeof file === 'function') {
     cb = file;
     file = this.active;
+  }
+
+  if (!file) {
+    return cb(new Error('Database not open'));
   }
 
   fs.fsync(file.dataStream.fd, function(err) {
@@ -520,10 +551,18 @@ Medea.prototype.sync = function(file, cb) {
 };
 
 Medea.prototype.compact = function(cb) {
+  if (!this.active) {
+    return cb(new Error('Database not open'));
+  }
+
   this.compactor.compact(cb);
 };
 
 Medea.prototype.mapReduce = function(options, cb) {
+  if (!this.active) {
+    return cb(new Error('Database not open'));
+  }
+
   var job = new MapReduce(this, options);
   job.run(cb);
 };
