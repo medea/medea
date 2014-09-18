@@ -52,55 +52,26 @@ Compactor.prototype.compact = function (cb) {
     return cb();
   }
 
-  DataFile.create(this.db.dirname, function (err, file) {
-    if (err) {
-      return cb(err);
+  // activeMerge === null means that when _getActiveMerge is called a new
+  // merge file will be created
+  this.activeMerge = null;
+
+  this._compactFiles(files, function(err) {
+    if (err || !self.activeMerge) {
+      cb(err);
+      return;
     }
 
-    self.activeMerge = file;
+    self.db.sync(self.activeMerge, function(err) {
 
-    self.db.readableFiles.push(self.activeMerge)
-
-    self._compactFiles(files, function(err) {
       if (err) {
-        cb(err);
+        if (cb) cb(err);
         return;
       }
 
-      var dataFileNames = files.map(function(f) {
-        return f.filename;
-      });
-
-      var hintFileNames = files.map(function(f) {
-        return f.filename.replace('.data', '.hint');
-      });
-
-      self.db.sync(self.activeMerge, function(err) {
-        if (err) {
-          if (cb) cb(err);
-          return;
-        }
-
-        self.db.readableFiles = self.db.readableFiles
-          .filter(function (file) {
-            return files.indexOf(file) === -1;
-          });
-
-        self._unlink(dataFileNames.concat(hintFileNames), function(err) {
-          if (err) {
-            if (cb) cb(err);
-            return;
-          }
-
-          if (cb) cb();
-        });
-      });
+      if (cb) cb();
     });
   });
-}
-
-Compactor.prototype._unlink = function(filenames, cb) {
-  async.forEach(filenames, fs.unlink, cb);
 }
 
 Compactor.prototype._handleEntries = function (entries, cb) {
@@ -172,7 +143,22 @@ Compactor.prototype._compactFile = function(file, cb) {
   });
 
   parser.on('end', function() {
-    self._handleEntries(entries, cb);
+    self._handleEntries(entries, function (err) {
+      if (err) {
+        return cb(err);
+      }
+
+      var index = self.db.readableFiles.indexOf(file);
+      self.db.readableFiles.splice(index, 1)
+
+      fs.unlink(file.filename, function (err) {
+        if (err) {
+          return cb(err);
+        }
+
+        fs.unlink(file.filename.replace('.data', '.hint'), cb);
+      });
+    });
   });
 
   parser.parse(cb);
@@ -218,7 +204,7 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
 Compactor.prototype._getActiveMerge = function (bytesToBeWritten, cb) {
   var self = this;
 
-  if (this.bytesToBeWritten + bytesToBeWritten < this.db.maxFileSize) {
+  if (this.activeMerge && this.bytesToBeWritten + bytesToBeWritten < this.db.maxFileSize) {
     this.bytesToBeWritten += bytesToBeWritten;
     cb(null, this.activeMerge);
   } else {
@@ -248,7 +234,10 @@ Compactor.prototype._wrapWriteFile = function(cb) {
     self.activeMerge = file;
     self.db.readableFiles.push(file);
     self.bytesToBeWritten = 0;
-    oldFile.closeForWriting(cb);
+    if (oldFile)
+      oldFile.closeForWriting(cb);
+    else
+      cb();
   });
 };
 
