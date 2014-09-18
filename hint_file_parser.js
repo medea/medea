@@ -1,29 +1,27 @@
 var fs = require('fs');
+var async = require('async');
 var constants = require('./constants');
 var KeyDirEntry = require('./keydir_entry');
 var sizes = constants.sizes;
 
 exports.parse = function(dirname, arr, keydir, cb) {
-  if (arr.length === 0) {
-    cb();
-    return;
-  }
-
   var hintFiles = arr.map(function(f) {
     return f.replace('.medea.data', '.medea.hint');
   });
 
-  iterator(dirname, keydir, hintFiles, 0, hintFiles.length - 1, function(err) {
-    cb();
-  });
+  async.forEach(
+    hintFiles,
+    function (hintFile, done) {
+      iterator(dirname, keydir, hintFile, done);
+    },
+    cb
+  );
 };
 
-var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
-  var current = hintFiles[i];
-
+var iterator = function(dirname, keydir, hintFile, cb1) {
   var hintHeaderSize = sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset;
 
-  var stream = fs.createReadStream(current);
+  var stream = fs.createReadStream(hintFile);
 
   var waiting = new Buffer(0);
   var curlen = 0;
@@ -88,7 +86,7 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
 
         var key = keyBuf.toString();
 
-        var fileId = Number(current.replace(dirname + '/', '').replace('.medea.hint', ''));
+        var fileId = Number(hintFile.replace(dirname + '/', '').replace('.medea.hint', ''));
         if (!keydir[key] || (keydir[key] && keydir[key].fileId === fileId)) {
           var entry = new KeyDirEntry();
           entry.key = key;
@@ -122,11 +120,5 @@ var iterator = function(dirname, keydir, hintFiles, i, max, cb1) {
 
   });
 
-  stream.on('end', function() {
-    if (i === max) {
-      cb1();
-    } else {
-      iterator(dirname, keydir, hintFiles, i+1, max, cb1);
-    }
-  });
+  stream.on('end', cb1);
 };

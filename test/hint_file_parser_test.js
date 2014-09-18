@@ -74,56 +74,48 @@ describe('HintFileParser', function() {
 
   describe('.parse', function() {
     before(function(done) {
-      var count = 0;
       var max = 10;
-      for (var i = 0; i < max; i++) {
+      var create = function (index) {
+        if (index === max)
+          return done();
+
         DataFile.create(directory, function(err, file) {
+          var key = 'hello' + index;
           var val = new Buffer(500);
           val.fill('v');
-          var buf = createStringBuffer('hello' + i, val.toString());
-          file.write(buf);
-          var buf = createStringBuffer('hello1' + i, val.toString());
-          file.write(buf);
-          var buf = createStringBuffer('hello2' + i, val.toString());
+          val = val.toString()
+          var buf = createStringBuffer(key, val);
           file.write(buf);
           var oldOffset = file.offset;
-          var hintBufs = createHintBuffer(file, buf, 'hello' + i, val.toString());
+          var hintBufs = createHintBuffer(file, buf, key, val);
+          files.push(file);
+          arr.push(file.filename);
           file.writeHintFile(hintBufs, function(err) {
             if (err) {
               if (cb) cb(err);
               return;
             }
-            file.hintCrc = crc32(hintBufs, file.hintCrc);
-            file.hintOffset += hintBufs.length;
 
-            var entry = new KeyDirEntry();
-            entry.fileId = file.timestamp;
-            entry.valueSize = val.length;
-            entry.valuePosition = oldOffset + sizes.header + ('hello' + i).length;
-            entry.timestamp = Date.now();
-
-            keydir[k] = entry;
-
-            count++;
-            if (count === max) {
-              done();
-            }
+            create(++index);
           });
-          files.push(file);
-          arr.push(file.filename);
         });
       }
+      create(0);
     });
 
     it('parses hint file entries', function(done) {
       HintFileParser.parse(directory, arr, keydir, function(err) {
         assert(!!Object.keys(keydir).length);
+        for(var i = 0; i < 10; ++i) {
+          assert.equal(keydir['hello' + i].key, 'hello' + i)
+          assert.equal(keydir['hello' + i].valueSize, 500)
+        }
         done();
       });
     });
 
     it('fires the callback even with an empty file array', function(done) {
-      HintFileParser.parse(directory, [], keydir, function(err) {
+      HintFileParser.parse(directory, [], {}, function(err) {
         assert(!err);
         done();
       });
