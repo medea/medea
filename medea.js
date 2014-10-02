@@ -567,4 +567,6 @@ Medea.prototype.mapReduce = function(options, cb) {
   job.run(cb);
 };
 
+Medea.destroy = require('./destroy');
+
 module.exports = Medea;
