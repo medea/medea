@@ -8,15 +8,6 @@ var medea = require('../');
 var directory = __dirname + '/tmp/medea_destroy_test';
 
 describe('Medea#destroy', function() {
-  before(function(done) {
-    require('rimraf')(directory, function () {
-      db = medea({ maxFileSize: 1024*1024 });
-      db.open(directory, function(err) {
-        done();
-      });
-    })
-  });
-
   describe('initialized and closed db', function () {
     before(function (done) {
       rimraf(directory, function () {
