@@ -56,4 +56,21 @@ describe('Medea#destroy', function() {
     });
   });
 
+  describe('folder with medea-files & lock-file', function () {
+    before(function (done) {
+      rimraf(directory, function () {
+        var db = medea();
+        db.open(directory, function() {
+          db.put('beep', 'boop', done);
+        });
+      });
+    });
+
+    it('deletes the folder', function (done) {
+      medea.destroy(directory, function () {
+        assert.equal(fs.existsSync(directory), false);
+        done();
+      });
+    });
+  });
 });

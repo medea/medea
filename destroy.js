@@ -11,7 +11,8 @@ var destroy = function (directory, cb) {
 
     files = files
       .filter(function (fileName) {
-        return path.extname(fileName) === '.hint' || path.extname(fileName) === '.data'
+        var extname = path.extname(fileName);
+        return extname === '.hint' || extname === '.data' || fileName === 'medea.lock';
       })
       .map(function (fileName) {
         return path.join(directory, fileName);
@@ -23,7 +24,7 @@ var destroy = function (directory, cb) {
       }
 
       fs.rmdir(directory, function (err) {
-        cb( err && err.code !== 'ENOTEMPTY' ? err : undefined)
+        cb(err && err.code !== 'ENOTEMPTY' ? err : undefined);
       });
     });
   });
