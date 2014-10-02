@@ -29,11 +29,40 @@ describe('Medea#destroy', function() {
       });
     });
 
-    it('removes the folder', function (done) {
+    it('deletes the folder', function (done) {
       medea.destroy(directory, function () {
         assert.equal(fs.existsSync(directory), false);
         done();
       });
     });
   });
+
+  describe('folder with medea and some other files', function () {
+    before(function (done) {
+      rimraf(directory, function () {
+        var db = medea();
+        db.open(directory, function() {
+          db.put('beep', 'boop', function () {
+            db.close(function () {
+              fs.writeFileSync(directory + '/beep.boop', 'beep boop');
+              fs.writeFileSync(directory + '/hello.world', 'hello, world!');
+              done();
+            });
+          });
+        });
+      });
+    });
+
+    it('deletes the medea files, but not the folder', function (done) {
+      medea.destroy(directory, function (err) {
+        if (err) return done(err);
+
+        var filenames = fs.readdirSync(directory).sort();
+
+        assert.deepEqual(filenames, [ 'beep.boop', 'hello.world' ]);
+        done();
+      });
+    });
+  });
+
 });
