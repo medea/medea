@@ -12,6 +12,7 @@ var DataEntry = require('./data_entry');
 var utils = require('./utils');
 var Compactor = require('./compactor');
 var DataFile = require('./data_file');
+var destroy = require('./destroy');
 var HintFileParser = require('./hint_file_parser');
 var KeyDirEntry = require('./keydir_entry');
 var MapReduce = require('./map_reduce');
@@ -566,5 +567,11 @@ Medea.prototype.mapReduce = function(options, cb) {
   var job = new MapReduce(this, options);
   job.run(cb);
 };
+
+Medea.prototype.destroy = function (cb) {
+  destroy(this.dirname, cb);
+};
+
+Medea.destroy = destroy;
 
 module.exports = Medea;
