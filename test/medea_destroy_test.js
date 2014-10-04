@@ -61,7 +61,10 @@ describe('Medea#destroy', function() {
       rimraf(directory, function () {
         var db = medea();
         db.open(directory, function() {
-          db.put('beep', 'boop', done);
+          db.put('beep', 'boop', function () {
+            fs.writeFileSync(directory + '/medea.lock', '123')
+            done()
+          });
         });
       });
     });
@@ -73,4 +76,21 @@ describe('Medea#destroy', function() {
       });
     });
   });
+
+  describe('active medea instance', function () {
+    before(function (done) {
+      rimraf(directory, function () {
+        var db = medea();
+        db.open(directory, done);
+      });
+    });
+
+    it('errors', function (done) {
+      medea.destroy(directory, function (err) {
+        assert(err instanceof Error, 'should error');
+        done();
+      });
+    });
+  });
+
 });
