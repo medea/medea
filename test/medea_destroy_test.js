@@ -7,7 +7,7 @@ var medea = require('../');
 
 var directory = __dirname + '/tmp/medea_destroy_test';
 
-describe('Medea#destroy', function() {
+describe('Medea.destroy', function() {
   describe('initialized and closed db', function () {
     before(function (done) {
       rimraf(directory, function () {
@@ -93,4 +93,28 @@ describe('Medea#destroy', function() {
     });
   });
 
+});
+
+describe('Medea#destroy', function () {
+  var db;
+
+  describe('initialized and closed db', function () {
+    before(function (done) {
+      rimraf(directory, function () {
+        db = medea();
+        db.open(directory, function () {
+          db.put('beep', 'boop', function () {
+            db.close(done);
+          });
+        });
+      });
+    });
+
+    it('deletes the folder', function (done) {
+      db.destroy(function () {
+        assert.equal(fs.existsSync(directory), false);
+        done();
+      });
+    });
+  });
 });
