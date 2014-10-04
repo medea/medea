@@ -28,6 +28,7 @@ A persistent key-value storage library.
   - [db.listKeys(callback)](#dblistkeyscallback)
   - [db.mapReduce(options, callback)](#dbmapreduceoptions-callback)
   - [db.compact(callback)](#dbcompactcallback)
+  - [db.destroy(callback) / medea.destory(director, callback)](#dbdestroycallback--medeadestorydirector-callback)
 - [How It Works](#how-it-works)
   - [Keydir](#keydir)
   - [Data Files](#data-files)
@@ -169,6 +170,10 @@ See `examples/map_reduce.js` for an example. <!--_-->
 Runs a compaction process on the database files.  Reduces size of data on disk.  Deletes old log entries.
 
 `callback`: A function that takes an error parameter.
+
+### db.destroy(callback) / medea.destory(director, callback)
+
+Destroys the database. If the folder only includes medea-files, the folder is removed also otherwise only the medea-files are removed and the folder is kept.
 
 ## How it Works
 
