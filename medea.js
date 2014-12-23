@@ -230,7 +230,7 @@ Medea.prototype.put = function(k, v, cb) {
     k = new Buffer(k.toString());
   }
 
-  if (!(v instanceof Buffer) && typeof v !== 'string') {
+  if (!(v instanceof Buffer)) {
     v = new Buffer(v.toString());
   }
 
