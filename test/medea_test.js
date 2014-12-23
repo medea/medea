@@ -56,6 +56,15 @@ describe('Medea', function() {
       });
     });
 
+    it('successfully retrieves a UTF-8 value', function(done) {
+      db.put('hello', '\u2661', function(err) {
+        db.get('hello', function(err, val) {
+          assert.equal(val.toString(), '\u2661');
+          done();
+        });
+      });
+    });
+
     it('successfully retrieves a value', function(done) {
       db.put('foo', new Buffer('bar'), function(err) {
         db.get('foo', function(err, val) {
