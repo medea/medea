@@ -28,6 +28,7 @@ DataFileParser.prototype.parse = function() {
   var lastHeaderBuf;
   var lastKVLen = -1;
   var state = 'findingHeader';
+  var posCount = 0;
 
   stream.on('data', function(chunk) {
     curlen = chunk.length;
@@ -72,6 +73,7 @@ DataFileParser.prototype.parse = function() {
         waiting = new Buffer(0);
         curlen = chunk.length;
 
+        posCount += headerBuf.length + keylen;
         state = 'headerFound';
       } else if (curlen >= lastKVLen && state === 'headerFound') {
         var kvBuf = chunk.slice(0, lastKVLen);
@@ -79,8 +81,10 @@ DataFileParser.prototype.parse = function() {
         var bufs = Buffer.concat([lastHeaderBuf, kvBuf]);
 
         var entry = DataEntry.fromBuffer(bufs);
+        entry.valuePosition = posCount;
         self.emit('entry', entry);
 
+        posCount += entry.valueSize;
         chunk = chunk.slice(lastKVLen);
         curlen = chunk.length;
         lastKVLen = -1;

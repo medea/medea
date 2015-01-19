@@ -382,3 +382,34 @@ describe('Medea#open on already opened directory', function () {
     db.close(done);
   });
 });
+
+describe('Medea#open() when there are missing hint files', function () {
+
+  it('should pass', function (done) {
+    var db1 = medea({});
+    require('rimraf')(directory, function() {
+      db1.open(directory, function(err) {
+        assert(!err);
+        db1.put('hello', 'world', function(err) {
+          assert(!err);
+          db1.close(function(err) {
+            assert(!err);
+            fs.unlink(directory + '/1.medea.hint', function() {
+              var db2 = medea({});
+              db2.open(directory, function(err) {
+                assert(!err);
+                // error is thrown before executing this callback
+                db2.get('hello', function(err, val) {
+                  assert(!err);
+                  assert.equal(val.toString(), 'world');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+
+});
