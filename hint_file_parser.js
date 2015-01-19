@@ -1,28 +1,54 @@
 var fs = require('fs');
 var path = require('path');
 var async = require('async');
+var DataFileParser = require('./data_file_parser');
 var constants = require('./constants');
 var KeyDirEntry = require('./keydir_entry');
 var sizes = constants.sizes;
 
 exports.parse = function(dirname, arr, keydir, cb) {
-  var hintFiles = arr.map(function(f) {
-    return f.replace('.medea.data', '.medea.hint');
-  });
-
   async.forEach(
-    hintFiles,
-    function (hintFile, done) {
-      iterator(dirname, keydir, hintFile, done);
+    arr,
+    function (dataFile, done) {
+      iterator(dirname, keydir, dataFile, done);
     },
     cb
   );
 };
 
-var iterator = function(dirname, keydir, hintFile, cb1) {
+// parse data file for keys when hint file is missing
+var datafileIterator = function(dirname, keydir, dataFile, cb1) {
+  var fileId = Number(dataFile.replace(dirname + '/', '').replace('.medea.data', ''));
+  var file = new DataFileParser({ filename: dataFile });
+  file.on('error', cb1);
+  file.on('entry', function(entry) {
+    var key = entry.key.toString();
+    if (!keydir[key] || (keydir[key] && keydir[key].fileId === fileId)) {
+      var kEntry = new KeyDirEntry();
+      kEntry.key = key;
+      kEntry.fileId = fileId;
+      kEntry.timestamp = entry.timestamp;
+      kEntry.valueSize = entry.valueSize;
+      kEntry.valuePosition = entry.valuePosition;
+      keydir[key] = kEntry;
+    }
+  });
+  file.on('end', cb1);
+  file.parse();
+};
+
+var iterator = function(dirname, keydir, dataFile, cb1) {
+  var hintFile = dataFile.replace('.medea.data', '.medea.hint');
   var hintHeaderSize = sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset;
 
   var stream = fs.createReadStream(hintFile, { autoClose: false });
+  stream.on('error', function(err) {
+    // handle hint file missing
+    if (err.code === 'ENOENT') {
+      return datafileIterator(dirname, keydir, dataFile, cb1);
+    }
+    throw err;
+  });
 
   var waiting = new Buffer(0);
   var curlen = 0;
