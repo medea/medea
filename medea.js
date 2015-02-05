@@ -218,8 +218,10 @@ Medea.prototype.close = function(cb) {
   this.active.closeForWriting(function() {
     lockFile.unlock(self.dirname + '/medea.lock', function () {
       self._closeReadableFiles(function () {
-        self.active = null;
-        cb();
+        fs.close(self.active.fd, function(err) {
+          self.active = null;
+          cb(err);
+        });
       });
     });
   });

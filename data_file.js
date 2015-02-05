@@ -18,6 +18,7 @@ var DataFile = module.exports = function() {
   this.closingHintFile = false;
   this.dataStream = null;
   this.hintStream = null;
+  this.wereBytesWritten = false;
 };
 
 DataFile.create = function(dirname, cb) {
@@ -88,6 +89,8 @@ DataFile.prototype.write = function(bufs, options, cb) {
   options.sync = options.sync || false;
 
   this.dataStream.write(bufs, function () {
+    self.wereBytesWritten = true;
+
     if (options.sync) {
       fs.fsync(self.fd, cb)
     } else {
@@ -110,16 +113,24 @@ DataFile.prototype.closeForWriting = function(cb) {
   var self = this;
 
   this.dataStream.end(function () {
-    fs.fsync(self.fd, function(err) {
-      if (err) {
-        cb(err);
-        return;
-      }
-
+    var next = function(callback) {
       self._closeHintFile(function(err) {
-        if (cb) cb(err);
+          if (callback) callback(err);
       });
-    });
+    };
+
+    if (self.wereBytesWritten) {
+      fs.fsync(self.fd, function(err) {
+        if (err) {
+          cb(err);
+          return;
+        }
+
+        next(cb);
+      });
+    } else {
+      next(cb);
+    }
   });
 };
 
@@ -133,17 +144,28 @@ DataFile.prototype._closeHintFile = function(cb) {
 
   var self = this;
   this.hintStream.write(this.hintCrc, function() {
-    fs.fsync(self.hintFd, function(err) {
-      if (err) {
-        //console.log('Error fsyncing hint file during close.', err);
-        if (cb) cb(err);
-        return;
-      }
+    var next = function(callback) {
       self.hintStream.end(function(err) {
-        self.hintFd = null;
-        self.hintCrc = new Buffer(sizes.crc);
-        if (cb) cb();
+        fs.close(self.hintFd, function(err) {
+          self.hintFd = null;
+          self.hintCrc = new Buffer(sizes.crc);
+          if (callback) callback(err);
+        });
       });
-    });
+    };
+
+    if (self.wereBytesWritten) {
+      fs.fsync(self.hintFd, function(err) {
+        if (err) {
+          //console.log('Error fsyncing hint file during close.', err);
+          if (cb) cb(err);
+          return;
+        }
+
+        next(cb);
+      });
+    } else {
+      next(cb);
+    }
   });
 };
