@@ -51,10 +51,10 @@ DataFile.create = function(dirname, cb) {
 
         parallel({
             dataFd: function (done) {
-              fs.open(file.filename, 'r', done);
+              fs.open(file.filename, 'r+', done);
             },
             hintFd: function (done) {
-              fs.open(hintFilename, 'r', done);
+              fs.open(hintFilename, 'r+', done);
             }
           },
           function (err, results) {
@@ -120,6 +120,7 @@ DataFile.prototype.closeForWriting = function(cb) {
     };
 
     if (self.wereBytesWritten) {
+      var stat = fs.statSync(self.filename);
       fs.fsync(self.fd, function(err) {
         if (err) {
           cb(err);
@@ -143,29 +144,27 @@ DataFile.prototype._closeHintFile = function(cb) {
   this.closingHintFile = true;
 
   var self = this;
-  this.hintStream.write(this.hintCrc, function() {
-    var next = function(callback) {
-      self.hintStream.end(function(err) {
-        fs.close(self.hintFd, function(err) {
-          self.hintFd = null;
-          self.hintCrc = new Buffer(sizes.crc);
-          if (callback) callback(err);
-        });
+  var next = function(callback) {
+    self.hintStream.end(function(err) {
+      fs.close(self.hintFd, function(err) {
+        self.hintFd = null;
+        self.hintCrc = new Buffer(sizes.crc);
+        if (callback) callback(err);
       });
-    };
-
-    if (self.wereBytesWritten) {
+    });
+  };
+  if (self.wereBytesWritten) {
+    this.hintStream.write(this.hintCrc, function() {
       fs.fsync(self.hintFd, function(err) {
         if (err) {
-          //console.log('Error fsyncing hint file during close.', err);
           if (cb) cb(err);
           return;
         }
 
         next(cb);
       });
-    } else {
-      next(cb);
-    }
-  });
+    });
+  } else {
+    next(cb);
+  }
 };

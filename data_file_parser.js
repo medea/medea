@@ -13,7 +13,7 @@ util.inherits(DataFileParser, EventEmitter);
 
 DataFileParser.prototype.parse = function() {
   var self = this;
-  var stream = fs.createReadStream(this.file.filename);
+  var stream = fs.createReadStream(this.file.filename, { autoClose: false });
 
   stream.on('error', function(err) {
     self.emit('error', err);

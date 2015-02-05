@@ -157,10 +157,12 @@ Medea.prototype._scanFiles = function (cb) {
 }
 
 Medea.prototype._unlinkEmptyFiles = function (cb) {
+  var self = this;
   var filter = function (file) {
     var slice = file.slice(-5);
     return slice === '.data' || slice === '.hint';
   }
+
 
   unlinkEmptyFiles(this.dirname, filter, cb);
 }

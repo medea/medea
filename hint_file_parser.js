@@ -21,7 +21,7 @@ exports.parse = function(dirname, arr, keydir, cb) {
 var iterator = function(dirname, keydir, hintFile, cb1) {
   var hintHeaderSize = sizes.timestamp + sizes.keysize + sizes.totalsize + sizes.offset;
 
-  var stream = fs.createReadStream(hintFile);
+  var stream = fs.createReadStream(hintFile, { autoClose: false });
 
   var waiting = new Buffer(0);
   var curlen = 0;
