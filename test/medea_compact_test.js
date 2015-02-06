@@ -1,17 +1,11 @@
 var assert = require('assert');
 var fs = require('fs');
 var medea = require('../');
+var rimraf = require('rimraf');
 
-var directory = __dirname + '/tmp/medea_compact_test';
-var db;
+var root = __dirname + '/tmp/medea_compact_test';
 var setup = function (done) {
-  require('rimraf')(directory, function () {
-    db = medea({ maxFileSize: 512 });
-    db.open(directory, done);
-  });
-};
-var shutdown = function (done) {
-  db.close(done);
+  require('rimraf')(directory, done);
 };
 
 describe('Medea#compact', function() {
@@ -19,12 +13,32 @@ describe('Medea#compact', function() {
   this.timeout(0);
 
   describe('Multiple time overwriting same key', function () {
-    before(setup);
+    //before(setup);
 
-    it('successfully owerwites same key', function (done) {
+    it('successfully overwites same key', function (done) {
+      var directory = root + 'overwrites_same_key';
+      var db = medea({ maxFileSize: 512 });
       var test = function (index) {
-        if (index === 50)
-          return done();
+        if (index === 50) {
+          db.close(function() {
+            fs.readdirSync(directory).forEach(function (filename) {
+              filename = directory + '/' + filename;
+
+              try {
+                var stat = fs.statSync(filename)
+                assert(stat.size < db.maxFileSize);
+              } catch(e) {
+                if (e.code !== 'EPERM') { // issues/51
+                  throw e;
+                }
+              }
+            });
+
+            done();
+          });
+
+          return;
+        }
 
         var buffer1 = new Buffer(50),
           buffer2 = new Buffer(50),
@@ -55,28 +69,39 @@ describe('Medea#compact', function() {
           });
         });
       }
-      test(0);
-    });
-
-    it('obeys maxFileSize', function () {
-      fs.readdirSync(directory).forEach(function (filename) {
-        filename = directory + '/' + filename;
-
-        var stat = fs.statSync(filename)
-        assert(stat.size < db.maxFileSize);
+      db.open(directory, function() {
+        test(0);
       });
     });
-
-    after(shutdown);
   });
 
   describe('Multiple time writing different keys', function () {
-    before(setup);
 
     it('successfully writing different key', function (done) {
+      var db = medea({ maxFileSize: 512 });
+      var directory = root + 'writes_different_key';
       var test = function (index) {
-        if (index === 50)
-          return done();
+        if (index === 50) {
+          db.close(function() {
+            fs.readdirSync(directory).forEach(function (filename) {
+              filename = directory + '/' + filename;
+
+              try {
+                var stat = fs.statSync(filename)
+                assert(stat.size < db.maxFileSize);
+              } catch(e) {
+                if (e.code !== 'EPERM') { // issues/51
+                  throw e;
+                }
+              }
+            });
+
+            done();
+          });
+
+          return;
+        }
+
 
         var buffer1 = new Buffer(50),
           buffer2 = new Buffer(50),
@@ -113,43 +138,39 @@ describe('Medea#compact', function() {
           });
         });
       }
-      test(0);
-    });
-
-    it('obeys maxFileSize', function () {
-      fs.readdirSync(directory).forEach(function (filename) {
-        filename = directory + '/' + filename;
-
-        var stat = fs.statSync(filename)
-        assert(stat.size < db.maxFileSize);
+      db.open(directory, function() {
+        test(0);
       });
     });
-
-    after(shutdown);
   });
 
   describe('Write large amount of data', function () {
-    before(setup);
     var max = 100,
       bufferLength = 100;
 
+    var db = medea({ maxFileSize: 512 });
+    var directory = root + 'large_amounts';
     before(function (done) {
-      var put = function(index) {
-        if (index === max) {
-          return done();
-        }
+      rimraf(directory, function() {
+        db.open(directory, function() {
+          var put = function(index) {
+            if (index === max) {
+              return done();
+            }
 
-        var buffer = new Buffer(bufferLength);
+            var buffer = new Buffer(bufferLength);
 
-        buffer.fill(index);
+            buffer.fill(index);
 
-        db.put(buffer, buffer, function(err) {
-          if (err) return done(err);
-          put(++index);
+            db.put(buffer, buffer, function(err) {
+              if (err) return done(err);
+              put(++index);
+            });
+          }
+
+          put(0);
         });
-      }
-
-      put(0);
+      });
     });
 
     it('successfully compacts', function (done) {
@@ -183,54 +204,41 @@ describe('Medea#compact', function() {
       fs.readdirSync(directory).forEach(function (filename) {
         filename = directory + '/' + filename;
 
-        var stat = fs.statSync(filename)
-        assert(stat.size < db.maxFileSize);
+        try {
+          var stat = fs.statSync(filename)
+          assert(stat.size < db.maxFileSize);
+        } catch(e) {
+          if (e.code !== 'EPERM') { // issues/51
+            throw e;
+          }
+        }
       });
     });
-
-    after(shutdown);
   });
 
   describe('write many keys', function () {
-    before(function (done) {
-      require('rimraf')(directory, function () {
-        db = medea({
-          maxFileSize: 1024 * 1024
-        });
-        db.open(directory, done);
-      });
-    });
+    var db = medea({ maxFileSize: 1024 * 1024 });
+    var directory = root + 'many_keys';
 
     var max = 25000;
 
     before(function (done) {
-      var put = function(index) {
-        if (index === max) {
-          return done();
-        }
+      require('rimraf')(directory, function () {
+        db.open(directory, function() {
+          var put = function(index) {
+            if (index === max) {
+              return done();
+            }
 
-        db.put(index.toString(), index.toString(), function(err) {
-          if (err) return done(err);
-          put(++index);
+            db.put(index.toString(), index.toString(), function(err) {
+              if (err) return done(err);
+              put(++index);
+            });
+          }
+
+          put(0);
         });
-      }
-
-      put(0);
-    });
-
-    before(function (done) {
-      var put = function(index) {
-        if (index === max) {
-          return done();
-        }
-
-        db.put(index.toString(), index.toString(), function(err) {
-          if (err) return done(err);
-          put(++index);
-        });
-      }
-
-      put(0);
+      });
     });
 
     it('successfully compacts', function (done) {
@@ -266,7 +274,5 @@ describe('Medea#compact', function() {
         assert(stat.size < db.maxFileSize);
       });
     });
-
-    after(shutdown);
   })
 });

@@ -4,7 +4,6 @@ var crc32 = require('buffer-crc32');
 var lockFile = require('pidlockfile');
 var timestamp = require('monotonic-timestamp');
 var async = require('async');
-var unlinkEmptyFiles = require('unlink-empty-files');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -134,12 +133,15 @@ Medea.prototype._scanFiles = function (cb) {
 
   var self = this;
 
-  this._unlinkEmptyFiles(function (err) {
+  this._validateFiles(function (err, files) {
     if (err) {
       return cb(err);
     }
 
     fileops.listDataFiles(self.dirname, function(err, arr) {
+      arr = arr.filter(function(file) {
+        return files.indexOf(file) > -1;
+      });
 
       if (err) {
         return cb(err);
@@ -156,15 +158,54 @@ Medea.prototype._scanFiles = function (cb) {
   });
 }
 
-Medea.prototype._unlinkEmptyFiles = function (cb) {
+Medea.prototype._validateFiles = function (cb) {
   var self = this;
   var filter = function (file) {
     var slice = file.slice(-5);
     return slice === '.data' || slice === '.hint';
   }
 
+  fs.readdir(this.dirname, function(err, files) {
+    if (err) {
+      console.error(err);
+      cb(err);
+      return;
+    }
 
-  unlinkEmptyFiles(this.dirname, filter, cb);
+    var count = 0;
+
+    files = files.filter(filter);
+
+    if (files.length === 0) {
+      cb();
+      return;
+    }
+
+    var validFiles = [];
+
+    files.forEach(function(file) {
+      file = require('path').join(self.dirname, file);
+      fs.stat(file, function(err, stat) {
+        if (!err && (!stat.isFile() || stat.size > 0)) {
+          count++;
+          if (files.length === count) {
+            cb(null, validFiles);
+          }
+        } else if (!err && stat.isFile() && stat.size > 0) {
+          validFiles.push(file);
+        } else if (!err || (err && err.code === 'EPERM')) { // Windows EPERM issue: https://github.com/medea/medea/issues/51
+          fs.unlink(file, function(err) {
+            count++;
+            if (files.length === count) {
+              cb(err, validFiles);
+            }
+          });
+        } else {
+          cb(err);
+        }
+      });
+    });
+  });
 }
 
 Medea.prototype._openFiles = function (filenames, cb) {
