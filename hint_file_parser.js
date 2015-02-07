@@ -1,4 +1,5 @@
 var fs = require('fs');
+var path = require('path');
 var async = require('async');
 var constants = require('./constants');
 var KeyDirEntry = require('./keydir_entry');
@@ -86,7 +87,7 @@ var iterator = function(dirname, keydir, hintFile, cb1) {
 
         var key = keyBuf.toString();
 
-        var fileId = Number(hintFile.replace(dirname + '/', '').replace('.medea.hint', ''));
+        var fileId = Number(hintFile.replace(dirname + path.sep, '').replace('.medea.hint', ''));
         if (!keydir[key] || (keydir[key] && keydir[key].fileId === fileId)) {
           var entry = new KeyDirEntry();
           entry.key = key;
@@ -94,6 +95,7 @@ var iterator = function(dirname, keydir, hintFile, cb1) {
           entry.timestamp = lastHeaderBuf.readDoubleBE(0);
           entry.valueSize = lastHeaderBuf.readUInt32BE(sizes.timestamp + sizes.keysize) - key.length - sizes.header;
           entry.valuePosition = lastHeaderBuf.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize) + sizes.header + key.length;
+
           keydir[key] = entry;
         }
 

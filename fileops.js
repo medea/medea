@@ -1,4 +1,5 @@
 var fs = require('fs');
+var path = require('path');
 var constants = require('./constants');
 var sizes = constants.sizes;
 
@@ -55,7 +56,7 @@ exports.listDataFiles = function(dirname, cb) {
     });
 
     var ret = sorted.map(function(t) {
-      return dirname + '/' + t + '.medea.data';
+      return path.join(dirname, t + '.medea.data');
     });
 
     cb(null, ret);

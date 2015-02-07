@@ -1,4 +1,5 @@
 var fs = require('fs');
+var path = require('path');
 var appendStream = require('append-stream');
 var parallel = require('async').parallel;
 var constants = require('./constants');
@@ -24,14 +25,14 @@ var DataFile = module.exports = function() {
 DataFile.create = function(dirname, cb) {
   fileops.mostRecentTstamp(dirname, function(err, stamp) {
     stamp = stamp + 1;
-    var filename = dirname + '/' + stamp + '.medea.data';
+    var filename = path.join(dirname, stamp + '.medea.data');
     var file = new DataFile();
     file.filename = filename;
     file.dirname = dirname;
     file.readOnly = false;
     file.timestamp = stamp;
 
-    var hintFilename = dirname + '/' + stamp + '.medea.hint';
+    var hintFilename = path.join(dirname, stamp + '.medea.hint');
 
     parallel({
         dataStream: function (done) {

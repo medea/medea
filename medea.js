@@ -1,5 +1,6 @@
 var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
+var path = require('path');
 var crc32 = require('buffer-crc32');
 var lockFile = require('pidlockfile');
 var timestamp = require('monotonic-timestamp');
@@ -130,7 +131,6 @@ Medea.prototype.open = function(dir, options, cb) {
 };
 
 Medea.prototype._scanFiles = function (cb) {
-
   var self = this;
 
   this._validateFiles(function (err, files) {
@@ -167,41 +167,43 @@ Medea.prototype._validateFiles = function (cb) {
 
   fs.readdir(this.dirname, function(err, files) {
     if (err) {
-      console.error(err);
       cb(err);
       return;
     }
 
     var count = 0;
+    var validFiles = [];
 
     files = files.filter(filter);
 
     if (files.length === 0) {
-      cb();
+      cb(null, validFiles);
       return;
     }
 
-    var validFiles = [];
-
     files.forEach(function(file) {
-      file = require('path').join(self.dirname, file);
+      file = path.join(self.dirname, file);
       fs.stat(file, function(err, stat) {
-        if (!err && (!stat.isFile() || stat.size > 0)) {
+        if (stat && !stat.isFile()) {
           count++;
           if (files.length === count) {
             cb(null, validFiles);
           }
-        } else if (!err && stat.isFile() && stat.size > 0) {
-          validFiles.push(file);
-        } else if (!err || (err && err.code === 'EPERM')) { // Windows EPERM issue: https://github.com/medea/medea/issues/51
+        } else if (stat && stat.size === 0 || (err && err.code === 'EPERM')) { // Windows EPERM issue: https://github.com/medea/medea/issues/51
           fs.unlink(file, function(err) {
             count++;
             if (files.length === count) {
               cb(err, validFiles);
             }
           });
-        } else {
+        } else if (err) {
           cb(err);
+        } else {
+          count++;
+          validFiles.push(file);
+          if (files.length === count) {
+            cb(err, validFiles);
+          }
         }
       });
     });
@@ -224,7 +226,7 @@ Medea.prototype._openFiles = function (filenames, cb) {
         readable.filename = f;
         readable.dirname = self.dirname;
 
-        var filename = f.replace('\\', '/').split('/');
+        var filename = f.split(path.sep);
         readable.timestamp = filename[filename.length - 1].split('.')[0];
         readable.timestamp = Number(readable.timestamp);
 
