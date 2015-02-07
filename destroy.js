@@ -6,7 +6,7 @@ var lockFile = require('pidlockfile');
 
 var destroy = function (directory, cb) {
 
-  lockFile.check(directory + '/medea.lock', function (err, locked) {
+  lockFile.check(path.join(directory, 'medea.lock'), function (err, locked) {
     if (!err && locked) err = new Error('database is open');
 
     if (err && err.code !== 'ENOENT') {

@@ -116,7 +116,7 @@ DataFile.prototype.closeForWriting = function(cb) {
   this.dataStream.end(function () {
     var next = function(callback) {
       self._closeHintFile(function(err) {
-          if (callback) callback(err);
+        if (callback) callback(err);
       });
     };
 

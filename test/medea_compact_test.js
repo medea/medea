@@ -13,8 +13,6 @@ describe('Medea#compact', function() {
   this.timeout(0);
 
   describe('Multiple time overwriting same key', function () {
-    //before(setup);
-
     it('successfully overwites same key', function (done) {
       var directory = root + 'overwrites_same_key';
       var db = medea({ maxFileSize: 512 });

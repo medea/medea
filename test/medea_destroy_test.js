@@ -71,6 +71,7 @@ describe('Medea.destroy', function() {
 
     it('deletes the folder', function (done) {
       medea.destroy(directory, function () {
+        var stat = fs.statSync(directory);
         assert.equal(fs.existsSync(directory), false);
         done();
       });
@@ -78,17 +79,15 @@ describe('Medea.destroy', function() {
   });
 
   describe('active medea instance', function () {
-    before(function (done) {
+    it('errors', function (done) {
       rimraf(directory, function () {
         var db = medea();
-        db.open(directory, done);
-      });
-    });
-
-    it('errors', function (done) {
-      medea.destroy(directory, function (err) {
-        assert(err instanceof Error, 'should error');
-        done();
+        db.open(directory, function() {
+          medea.destroy(directory, function (err) {
+            assert(err instanceof Error, 'should error');
+            done();
+          });
+        });
       });
     });
   });
@@ -99,21 +98,19 @@ describe('Medea#destroy', function () {
   var db;
 
   describe('initialized and closed db', function () {
-    before(function (done) {
+    it('deletes the folder', function (done) {
       rimraf(directory, function () {
         db = medea();
         db.open(directory, function () {
           db.put('beep', 'boop', function () {
-            db.close(done);
+            db.close(function() {
+              db.destroy(function () {
+                assert.equal(fs.existsSync(directory), false);
+                done();
+              });
+            });
           });
         });
-      });
-    });
-
-    it('deletes the folder', function (done) {
-      db.destroy(function () {
-        assert.equal(fs.existsSync(directory), false);
-        done();
       });
     });
   });
