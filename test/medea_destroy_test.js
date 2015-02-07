@@ -71,7 +71,6 @@ describe('Medea.destroy', function() {
 
     it('deletes the folder', function (done) {
       medea.destroy(directory, function () {
-        var stat = fs.statSync(directory);
         assert.equal(fs.existsSync(directory), false);
         done();
       });
