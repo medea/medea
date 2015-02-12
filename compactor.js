@@ -151,12 +151,22 @@ Compactor.prototype._compactFile = function(file, cb) {
       var index = self.db.readableFiles.indexOf(file);
       self.db.readableFiles.splice(index, 1)
 
-      fs.unlink(file.filename, function (err) {
+      fs.close(file.fd, function(err) {
         if (err) {
           return cb(err);
         }
 
-        fs.unlink(file.filename.replace('.data', '.hint'), cb);
+        fs.unlink(file.filename, function (err) {
+          if (err) {
+            return cb(err);
+          }
+
+          fs.unlink(file.filename.replace('.data', '.hint'), cb);
+
+          if (err) {
+            return cb(err);
+          }
+        });
       });
     });
   });
@@ -234,10 +244,11 @@ Compactor.prototype._wrapWriteFile = function(cb) {
     self.activeMerge = file;
     self.db.readableFiles.push(file);
     self.bytesToBeWritten = 0;
-    if (oldFile)
+    if (oldFile) {
       oldFile.closeForWriting(cb);
-    else
+    } else {
       cb();
+    }
   });
 };
 

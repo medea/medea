@@ -1,4 +1,5 @@
 var fs = require('fs');
+var path = require('path');
 var appendStream = require('append-stream');
 var parallel = require('async').parallel;
 var constants = require('./constants');
@@ -18,19 +19,20 @@ var DataFile = module.exports = function() {
   this.closingHintFile = false;
   this.dataStream = null;
   this.hintStream = null;
+  this.wereBytesWritten = false;
 };
 
 DataFile.create = function(dirname, cb) {
   fileops.mostRecentTstamp(dirname, function(err, stamp) {
     stamp = stamp + 1;
-    var filename = dirname + '/' + stamp + '.medea.data';
+    var filename = path.join(dirname, stamp + '.medea.data');
     var file = new DataFile();
     file.filename = filename;
     file.dirname = dirname;
     file.readOnly = false;
     file.timestamp = stamp;
 
-    var hintFilename = dirname + '/' + stamp + '.medea.hint';
+    var hintFilename = path.join(dirname, stamp + '.medea.hint');
 
     parallel({
         dataStream: function (done) {
@@ -50,10 +52,10 @@ DataFile.create = function(dirname, cb) {
 
         parallel({
             dataFd: function (done) {
-              fs.open(file.filename, 'r', done);
+              fs.open(file.filename, 'r+', done);
             },
             hintFd: function (done) {
-              fs.open(hintFilename, 'r', done);
+              fs.open(hintFilename, 'r+', done);
             }
           },
           function (err, results) {
@@ -88,6 +90,8 @@ DataFile.prototype.write = function(bufs, options, cb) {
   options.sync = options.sync || false;
 
   this.dataStream.write(bufs, function () {
+    self.wereBytesWritten = true;
+
     if (options.sync) {
       fs.fsync(self.fd, cb)
     } else {
@@ -110,16 +114,25 @@ DataFile.prototype.closeForWriting = function(cb) {
   var self = this;
 
   this.dataStream.end(function () {
-    fs.fsync(self.fd, function(err) {
-      if (err) {
-        cb(err);
-        return;
-      }
-
+    var next = function(callback) {
       self._closeHintFile(function(err) {
-        if (cb) cb(err);
+        if (callback) callback(err);
       });
-    });
+    };
+
+    if (self.wereBytesWritten) {
+      var stat = fs.statSync(self.filename);
+      fs.fsync(self.fd, function(err) {
+        if (err) {
+          cb(err);
+          return;
+        }
+
+        next(cb);
+      });
+    } else {
+      next(cb);
+    }
   });
 };
 
@@ -132,18 +145,27 @@ DataFile.prototype._closeHintFile = function(cb) {
   this.closingHintFile = true;
 
   var self = this;
-  this.hintStream.write(this.hintCrc, function() {
-    fs.fsync(self.hintFd, function(err) {
-      if (err) {
-        //console.log('Error fsyncing hint file during close.', err);
-        if (cb) cb(err);
-        return;
-      }
-      self.hintStream.end(function(err) {
+  var next = function(callback) {
+    self.hintStream.end(function(err) {
+      fs.close(self.hintFd, function(err) {
         self.hintFd = null;
         self.hintCrc = new Buffer(sizes.crc);
-        if (cb) cb();
+        if (callback) callback(err);
       });
     });
-  });
+  };
+  if (self.wereBytesWritten) {
+    this.hintStream.write(this.hintCrc, function() {
+      fs.fsync(self.hintFd, function(err) {
+        if (err) {
+          if (cb) cb(err);
+          return;
+        }
+
+        next(cb);
+      });
+    });
+  } else {
+    next(cb);
+  }
 };

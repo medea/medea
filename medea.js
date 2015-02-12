@@ -1,10 +1,10 @@
 var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
+var path = require('path');
 var crc32 = require('buffer-crc32');
 var lockFile = require('pidlockfile');
 var timestamp = require('monotonic-timestamp');
 var async = require('async');
-var unlinkEmptyFiles = require('unlink-empty-files');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -131,15 +131,17 @@ Medea.prototype.open = function(dir, options, cb) {
 };
 
 Medea.prototype._scanFiles = function (cb) {
-
   var self = this;
 
-  this._unlinkEmptyFiles(function (err) {
+  this._validateFiles(function (err, files) {
     if (err) {
       return cb(err);
     }
 
     fileops.listDataFiles(self.dirname, function(err, arr) {
+      arr = arr.filter(function(file) {
+        return files.indexOf(file) > -1;
+      });
 
       if (err) {
         return cb(err);
@@ -156,13 +158,56 @@ Medea.prototype._scanFiles = function (cb) {
   });
 }
 
-Medea.prototype._unlinkEmptyFiles = function (cb) {
+Medea.prototype._validateFiles = function (cb) {
+  var self = this;
   var filter = function (file) {
     var slice = file.slice(-5);
     return slice === '.data' || slice === '.hint';
   }
 
-  unlinkEmptyFiles(this.dirname, filter, cb);
+  fs.readdir(this.dirname, function(err, files) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    var count = 0;
+    var validFiles = [];
+
+    files = files.filter(filter);
+
+    if (files.length === 0) {
+      cb(null, validFiles);
+      return;
+    }
+
+    files.forEach(function(file) {
+      file = path.join(self.dirname, file);
+      fs.stat(file, function(err, stat) {
+        if (stat && !stat.isFile()) {
+          count++;
+          if (files.length === count) {
+            cb(null, validFiles);
+          }
+        } else if (stat && stat.size === 0 || (err && err.code === 'EPERM')) { // Windows EPERM issue: https://github.com/medea/medea/issues/51
+          fs.unlink(file, function(err) {
+            count++;
+            if (files.length === count) {
+              cb(err, validFiles);
+            }
+          });
+        } else if (err) {
+          cb(err);
+        } else {
+          count++;
+          validFiles.push(file);
+          if (files.length === count) {
+            cb(err, validFiles);
+          }
+        }
+      });
+    });
+  });
 }
 
 Medea.prototype._openFiles = function (filenames, cb) {
@@ -181,7 +226,7 @@ Medea.prototype._openFiles = function (filenames, cb) {
         readable.filename = f;
         readable.dirname = self.dirname;
 
-        var filename = f.replace('\\', '/').split('/');
+        var filename = f.split(path.sep);
         readable.timestamp = filename[filename.length - 1].split('.')[0];
         readable.timestamp = Number(readable.timestamp);
 
@@ -218,8 +263,10 @@ Medea.prototype.close = function(cb) {
   this.active.closeForWriting(function() {
     lockFile.unlock(self.dirname + '/medea.lock', function () {
       self._closeReadableFiles(function () {
-        self.active = null;
-        cb();
+        fs.close(self.active.fd, function(err) {
+          self.active = null;
+          cb(err);
+        });
       });
     });
   });
