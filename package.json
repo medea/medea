@@ -1,6 +1,6 @@
 {
   "name": "medea",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "A lightweight key-value storage library.",
   "main": "medea.js",
   "scripts": {
