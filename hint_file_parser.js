@@ -18,7 +18,7 @@ exports.parse = function(dirname, arr, keydir, cb) {
 
 // parse data file for keys when hint file is missing
 var datafileIterator = function(dirname, keydir, dataFile, cb1) {
-  var fileId = Number(dataFile.replace(dirname + '/', '').replace('.medea.data', ''));
+  var fileId = Number(path.basename(dataFile, '.medea.data'));
   var file = new DataFileParser({ filename: dataFile });
   file.on('error', cb1);
   file.on('entry', function(entry) {
