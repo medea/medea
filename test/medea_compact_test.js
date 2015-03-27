@@ -273,4 +273,35 @@ describe('Medea#compact', function() {
       });
     });
   })
+
+  describe('handle missing hint files', function () {
+    it('should pass', function(done) {
+      var directory = root;
+      var db1 = medea({});
+      require('rimraf')(directory, function() {
+        db1.open(directory, function(err) {
+          assert(!err);
+          db1.put('hello', 'world', function(err) {
+            assert(!err);
+            db1.close(function(err) {
+              assert(!err);
+              fs.unlink(directory + '/1.medea.hint', function() {
+                var db2 = medea({});
+                db2.open(directory, function(err) {
+                  assert(!err);
+                  
+                  db2.compact(function(err) {
+                    if (err) {
+                      throw err;
+                    }
+                    done();
+                  })
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  })
 });

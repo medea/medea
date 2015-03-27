@@ -161,11 +161,12 @@ Compactor.prototype._compactFile = function(file, cb) {
             return cb(err);
           }
 
-          fs.unlink(file.filename.replace('.data', '.hint'), cb);
-
-          if (err) {
-            return cb(err);
-          }
+          fs.unlink(file.filename.replace('.data', '.hint'), function(err) {
+            if (err && err.code !== 'ENOENT') {
+              return cb(err);
+            }
+            cb();
+          });
         });
       });
     });
