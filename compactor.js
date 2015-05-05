@@ -3,6 +3,7 @@ var fs = require('fs');
 
 var async = require('async');
 var crc32 = require('buffer-crc32');
+var Map = global.Map || require('es6-map');
 
 var constants = require('./constants');
 var utils = require('./utils');
@@ -103,13 +104,13 @@ Compactor.prototype._handleEntry = function (entry, cb) {
     newEntry.fileId = entry.fileId;
     newEntry.timestamp = entry.timestamp;
 
-    self.delKeyDir[entry.key] = newEntry;
+    self.delKeyDir.set(entry.key.toString(), newEntry);
 
-    delete self.db.keydir[entry.key];
+    self.db.keydir.delete(entry.key.toString());
     self._innerMergeWrite(entry, cb);
   } else {
-    if (self.delKeyDir[entry.key]) {
-      delete self.delKeyDir[entry.key];
+    if (self.delKeyDir.has(entry.key.toString())) {
+      self.delKeyDir.delete(entry.key.toString());
     }
 
     self._innerMergeWrite(entry, cb);
@@ -132,7 +133,7 @@ Compactor.prototype._compactFile = function(file, cb) {
   var self = this;
   var parser = new DataFileParser(file);
   var entries = [];
-  this.delKeyDir = [];
+  this.delKeyDir = new Map();
 
   parser.on('error', function(err) {
     cb(err);
@@ -183,7 +184,7 @@ Compactor.prototype._outOfDate = function(keydirs, everFound, fileEntry) {
   }
 
   var keydir = keydirs[0];
-  var keyDirEntry = keydir[fileEntry.key];
+  var keyDirEntry = keydir.get(fileEntry.key.toString());
 
   if (!keyDirEntry) {
     keydirs.shift();
@@ -308,7 +309,7 @@ Compactor.prototype._innerMergeWrite = function(dataEntry, cb) {
             if (cb) return cb(err);
           }
 
-          self.db.keydir[key] = entry;
+          self.db.keydir.set(key.toString(), entry);
 
           if (cb) cb();
         });

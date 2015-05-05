@@ -23,14 +23,14 @@ var datafileIterator = function(dirname, keydir, dataFile, cb1) {
   file.on('error', cb1);
   file.on('entry', function(entry) {
     var key = entry.key.toString();
-    if (!keydir[key] || (keydir[key] && keydir[key].fileId === fileId)) {
+    if (!keydir.has(key) || (keydir.has(key) && keydir.get(key).fileId === fileId)) {
       var kEntry = new KeyDirEntry();
       kEntry.key = key;
       kEntry.fileId = fileId;
       kEntry.timestamp = entry.timestamp;
       kEntry.valueSize = entry.valueSize;
       kEntry.valuePosition = entry.valuePosition;
-      keydir[key] = kEntry;
+      keydir.set(key, kEntry);
     }
   });
   file.on('end', cb1);
@@ -114,7 +114,7 @@ var iterator = function(dirname, keydir, dataFile, cb1) {
         var key = keyBuf.toString();
 
         var fileId = Number(hintFile.replace(dirname + path.sep, '').replace('.medea.hint', ''));
-        if (!keydir[key] || (keydir[key] && keydir[key].fileId === fileId)) {
+        if (!keydir.has(key) || (keydir.has(key) && keydir.get(key).fileId === fileId)) {
           var entry = new KeyDirEntry();
           entry.key = key;
           entry.fileId = fileId;
@@ -122,7 +122,7 @@ var iterator = function(dirname, keydir, dataFile, cb1) {
           entry.valueSize = lastHeaderBuf.readUInt32BE(sizes.timestamp + sizes.keysize) - key.length - sizes.header;
           entry.valuePosition = lastHeaderBuf.readDoubleBE(sizes.timestamp + sizes.keysize + sizes.totalsize) + sizes.header + key.length;
 
-          keydir[key] = entry;
+          keydir.set(key, entry);
         }
 
         chunk = chunk.slice(lastKeyLen);
