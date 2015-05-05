@@ -4,14 +4,15 @@ var crc32 = require('buffer-crc32');
 var DataFile = require('../data_file');
 var HintFileParser = require('../hint_file_parser');
 var KeyDirEntry = require('../keydir_entry');
-
+var Map = global.Map || require('es6-map');
+var utils = require('../utils')
 var sizes = constants.sizes;
 var headerOffsets = constants.headerOffsets;
 
 var directory = __dirname + '/tmp/hint_file_parser_test';
 var arr = [];
 var files = [];
-var keydir = {};
+var keydir = new Map();
 
 function createBuffer(k, v) {
   var ts = Date.now();
@@ -105,17 +106,17 @@ describe('HintFileParser', function() {
 
     it('parses hint file entries', function(done) {
       HintFileParser.parse(directory, arr, keydir, function(err) {
-        assert(!!Object.keys(keydir).length);
+        assert(!!utils.dumpMapKeys(keydir).length);
         for(var i = 0; i < 10; ++i) {
-          assert.equal(keydir['hello' + i].key, 'hello' + i)
-          assert.equal(keydir['hello' + i].valueSize, 500)
+          assert.equal(keydir.get('hello' + i).key, 'hello' + i)
+          assert.equal(keydir.get('hello' + i).valueSize, 500)
         }
         done();
       });
     });
 
     it('fires the callback even with an empty file array', function(done) {
-      HintFileParser.parse(directory, [], {}, function(err) {
+      HintFileParser.parse(directory, [], new Map(), function(err) {
         assert(!err);
         done();
       });

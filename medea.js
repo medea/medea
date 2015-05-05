@@ -5,6 +5,7 @@ var crc32 = require('buffer-crc32');
 var lockFile = require('pidlockfile');
 var timestamp = require('monotonic-timestamp');
 var async = require('async');
+var Map = global.Map || require('es6-map');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -40,7 +41,7 @@ var Medea = function(options) {
   EventEmitter.call(this);
 
   this.active = null;
-  this.keydir = {};
+  this.keydir = new Map();
 
   options = options || {};
 
@@ -59,7 +60,7 @@ var Medea = function(options) {
   this.fragThreshold = options.hasOwnProperty('fragThreshold')
     ? options.fragThreshold : 40; // fragmentation >= 40%
 
-  this.deadBytesThreshold = options.hasOwnProperty('deadBytesThreshold') 
+  this.deadBytesThreshold = options.hasOwnProperty('deadBytesThreshold')
     ? options.deadBytesThreshold : 134217728; // dead bytes > 128MB
 
   this.smallFileThreshold = options.hasOwnProperty('smallFileThreshold')
@@ -333,8 +334,7 @@ Medea.prototype.put = function(k, v, cb) {
         entry.valuePosition = oldOffset + sizes.header + key.length;
         entry.timestamp = ts;
 
-        self.keydir[k] = entry;
-
+        self.keydir.set(k.toString(), entry);
         if (cb) cb();
       });
     });
@@ -386,7 +386,7 @@ Medea.prototype.write = function(batch, options, cb) {
       var hintBufs = [];
       var hintBufsSize = 0;
       var newHintCrc = file.hintCrc;
-      var keydirDelta = {};
+      var keydirDelta = new Map();
 
       var copyBufferOffset = 0;
 
@@ -418,14 +418,14 @@ Medea.prototype.write = function(batch, options, cb) {
         hintBufsSize += hintBuf.length;
         hintBufs.push(hintBuf);
         newHintCrc = crc32(hintBuf, newHintCrc);
-        
+
         var entry = new KeyDirEntry();
         entry.fileId = file.timestamp;
         entry.valueSize = value.length;
         entry.valuePosition = oldOffset + sizes.header + key.length;
         entry.timestamp = dataEntry.timestamp;
 
-        keydirDelta[key] = entry;
+        keydirDelta.set(key.toString(), entry);
 
         oldOffset += dataEntry.buffer.length;
         copyBufferOffset += dataEntry.buffer.length;
@@ -445,9 +445,9 @@ Medea.prototype.write = function(batch, options, cb) {
           var key = operation.entry.key.toString();
 
           if (operation.type === 'remove') {
-            delete self.keydir[key];
+            self.keydir.delete(key);
           } else {
-            self.keydir[key] = keydirDelta[key];
+            self.keydir.set(key, keydirDelta.get(key));
           }
         })
 
@@ -514,8 +514,8 @@ Medea.prototype.get = function(key, snapshot, cb) {
   if (!this.active) {
     return cb(new Error('Database not open'));
   }
-
-  var entry = snapshot ? snapshot.keydir[key] : this.keydir[key];
+  key = key.toString()
+  var entry = snapshot ? snapshot.keydir.get(key) : this.keydir.get(key);
   if (!entry) {
     if (cb) cb();
     return;
@@ -554,8 +554,8 @@ Medea.prototype.remove = function(key, cb) {
     if (err) {
       if (cb) cb(err);
     } else {
-      if (self.keydir[key]) {
-        delete self.keydir[key];
+      if (self.keydir.has(key)) {
+        self.keydir.delete(key);
       }
       if(cb) cb();
     }
@@ -567,7 +567,7 @@ Medea.prototype.createBatch = function() {
 };
 
 Medea.prototype.listKeys = function(cb) {
-  if (cb) cb(null, Object.keys(this.keydir));
+  if (cb) cb(null, utils.dumpMapKeys(this.keydir));
 };
 
 Medea.prototype.createSnapshot = function () {
