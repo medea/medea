@@ -73,6 +73,24 @@ describe('Medea', function() {
         });
       });
     });
+    it('unsuccessfully retrieves a value', function(done) {
+      db.put('foo', new Buffer('bar'), function(err) {
+        db.get('bar', function(err, val) {
+          assert(!err);
+          assert(!val);
+          done();
+        });
+      });
+    });
+    it('unsuccessfully retrieves a value reserved key name', function(done) {
+      db.put('foo', new Buffer('bar'), function(err) {
+        db.get('constructor', function(err, val) {
+          assert(!err);
+          assert(!val);
+          done();
+        });
+      });
+    });
   });
 
   describe('#remove', function() {
@@ -277,7 +295,7 @@ describe('Medea', function() {
     }
 
     put(0);
-    
+
   });
 
   it('successfully concurrently writes large amounts of data', function(done) {
