@@ -23,6 +23,11 @@ var datafileIterator = function(dirname, keydir, dataFile, cb1) {
   file.on('error', cb1);
   file.on('entry', function(entry) {
     var key = entry.key.toString();
+
+    if (key.length === 0) {
+      return;
+    }
+
     if (!keydir.has(key) || (keydir.has(key) && keydir.get(key).fileId === fileId)) {
       var kEntry = new KeyDirEntry();
       kEntry.key = key;
