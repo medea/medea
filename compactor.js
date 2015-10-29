@@ -1,5 +1,6 @@
 var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
+var path = require('path');
 
 var async = require('async');
 var crc32 = require('buffer-crc32');
@@ -51,7 +52,7 @@ Compactor.prototype.compact = function (cb) {
 
   if (!files.length) {
     return cb();
-  }
+  };
 
   // activeMerge === null means that when _getActiveMerge is called a new
   // merge file will be created
@@ -70,10 +71,62 @@ Compactor.prototype.compact = function (cb) {
         return;
       }
 
-      if (cb) cb();
+      self._cleanUpDanglingHintFiles(function(err) {
+        if (err) {
+          if (cb) cb(err);
+          return;
+        }
+
+        if (cb) cb();
+      });
     });
   });
-}
+};
+
+Compactor.prototype._cleanUpDanglingHintFiles = function(cb) {
+  var hintFileNames = this.db.readableFiles.map(function(file) {
+    return file.filename.replace('.data', '.hint');
+  });
+
+  var hintFileRegex = /\.hint$/;
+
+  var self = this;
+  fs.readdir(this.db.dirname, function(err, files) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    var diff = files
+      .map(function(filename) {
+        return path.join(self.db.dirname, filename);
+      })
+      .filter(function(filename) {
+        return hintFileRegex.test(filename) && hintFileNames.indexOf(filename) === -1;
+      });
+
+    var index = 0;
+    var max = diff.length;
+
+    function unlink(i) {
+      if (i === max) {
+        cb();
+        return;
+      }
+
+      fs.unlink(diff[i], function(err) {
+        if (err) {
+          cb(err);
+          return;
+        }
+
+        unlink(++i);
+      });
+    }
+
+    unlink(index);
+  });
+};
 
 Compactor.prototype._handleEntries = function (entries, cb) {
   var self = this;
@@ -163,6 +216,7 @@ Compactor.prototype._compactFile = function(file, cb) {
           }
 
           fs.unlink(file.filename.replace('.data', '.hint'), function(err) {
+            if (err) console.log(err);
             if (err && err.code !== 'ENOENT') {
               return cb(err);
             }
