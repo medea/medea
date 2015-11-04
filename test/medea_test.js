@@ -107,13 +107,13 @@ describe('Medea', function() {
 
               fs.unlinkSync(path.join(directory, '1.medea.hint'));
               var contents = fs.readFileSync(path.join(directory, '1.medea.data'));
-              var fd = fs.openSync(path.join(directory, '1.medea.data'), 'w+');
 
               var empty = new Buffer(18);
               empty.fill(0)
 
               var buf = Buffer.concat([empty, contents]);
 
+              var fd = fs.openSync(path.join(directory, '1.medea.data'), 'w+');
               fs.write(fd, buf, 0, buf.length, function(err) {
                 fs.closeSync(fd);
 
