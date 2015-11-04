@@ -1,6 +1,8 @@
 var assert = require('assert');
 var fs = require('fs');
+var path = require('path');
 var medea = require('../');
+var DataBuffer = require('../data_buffer');
 
 var directory = __dirname + '/tmp/medea_test';
 var db;
@@ -90,6 +92,47 @@ describe('Medea', function() {
           done();
         });
       });
+    });
+    it('successfully recovers from zero-length entries', function(done) {
+      var db;
+      var directory = __dirname + '/tmp/medea_test2';
+      require('rimraf')(directory, function () {
+        db = medea({ maxFileSize: 1024*1024 });
+        db.open(directory, function(err) {
+          db.put('foo', new Buffer('bar'), function(err) {
+            assert(!err);
+
+            db.close(function(err) {
+              assert(!err);
+
+              fs.unlinkSync(path.join(directory, '1.medea.hint'));
+              var contents = fs.readFileSync(path.join(directory, '1.medea.data'));
+              var fd = fs.openSync(path.join(directory, '1.medea.data'), 'w+');
+
+              var empty = new Buffer(18);
+              empty.fill(0)
+
+              var buf = Buffer.concat([empty, contents]);
+
+              fs.write(fd, buf, 0, buf.length, function(err) {
+                fs.closeSync(fd);
+
+                db.open(directory, function(err) {
+                  assert(!err);
+
+                  db.get('foo', function(err, val) {
+                    assert(!err);
+
+                    assert.equal(val.toString(), 'bar');
+
+                    done();
+                  });
+                });
+              });
+            });
+          });
+        });
+      })
     });
   });
 
@@ -457,6 +500,4 @@ describe('Medea#open() when there are missing hint files', function () {
       });
     });
   });
-
-
 });

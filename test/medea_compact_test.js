@@ -331,7 +331,7 @@ describe('Medea#compact', function() {
                 });
 
                 var files = fs.readdirSync(directory);
-                assert.equal(10, files.length);
+                assert.equal(files.length, 10);
 
                 db2.compact(function(err) {
                   assert(!err);
