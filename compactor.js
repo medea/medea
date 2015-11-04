@@ -52,7 +52,7 @@ Compactor.prototype.compact = function (cb) {
 
   if (!files.length) {
     return cb();
-  };
+  }
 
   // activeMerge === null means that when _getActiveMerge is called a new
   // merge file will be created
