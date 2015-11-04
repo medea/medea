@@ -216,7 +216,6 @@ Compactor.prototype._compactFile = function(file, cb) {
           }
 
           fs.unlink(file.filename.replace('.data', '.hint'), function(err) {
-            if (err) console.log(err);
             if (err && err.code !== 'ENOENT') {
               return cb(err);
             }
