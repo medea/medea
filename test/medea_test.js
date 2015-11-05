@@ -114,7 +114,7 @@ describe('Medea', function() {
               var buf = Buffer.concat([empty, contents]);
 
               var fd = fs.openSync(path.join(directory, '1.medea.data'), 'w+');
-              fs.write(fd, buf, 0, buf.length, function(err) {
+              fs.write(fd, buf, 0, buf.length, 0, function(err) {
                 fs.closeSync(fd);
 
                 db.open(directory, function(err) {
