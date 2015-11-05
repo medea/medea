@@ -4,7 +4,7 @@
   "description": "A lightweight key-value storage library.",
   "main": "medea.js",
   "scripts": {
-    "test": "node_modules/.bin/mocha -R spec -t 5000",
+    "test": "node_modules/.bin/mocha -R spec -t 10000",
     "coverage": "bin/_coverage"
   },
   "repository": {
