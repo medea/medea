@@ -1,5 +1,6 @@
 var assert = require('assert');
 var fs = require('fs');
+var path = require('path');
 var medea = require('../');
 var rimraf = require('rimraf');
 
@@ -303,5 +304,57 @@ describe('Medea#compact', function() {
         });
       });
     });
-  })
+  });
+
+  describe('cleanup dangling hint files', function () {
+    it('should pass', function(done) {
+      var directory = root;
+      var db1 = medea({});
+      require('rimraf')(directory, function() {
+        db1.open(directory, function(err) {
+          assert(!err);
+          db1.put('hello', 'world', function(err) {
+            assert(!err);
+            db1.close(function(err) {
+              var db2 = medea({});
+              db2.open(directory, function(err) {
+                assert(!err);
+
+                var fds = [];
+                for (var i = 10; i < 15; i++) {
+                  var fd = fs.openSync(path.join(directory, i + '.medea.hint'), 'w');
+                  fds.push(fd);
+                }
+
+                fds.forEach(function(fd) {
+                  fs.closeSync(fd);
+                });
+
+                var files = fs.readdirSync(directory);
+                assert.equal(files.length, 10);
+
+                db2.compact(function(err) {
+                  assert(!err);
+
+                  var files = fs.readdirSync(directory);
+
+                  var hintFileNumbers = files.filter(function(file) {
+                    return file.indexOf('hint') > -1;
+                  }).map(function(file) {
+                    return file[0];
+                  });
+
+                  hintFileNumbers.forEach(function(number) {
+                    assert(files.indexOf(number + '.medea.data') > -1);
+                  });
+
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
 });

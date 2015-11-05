@@ -516,7 +516,7 @@ Medea.prototype.get = function(key, snapshot, cb) {
   }
   key = key.toString()
   var entry = snapshot ? snapshot.keydir.get(key) : this.keydir.get(key);
-  if (!entry) {
+  if (!entry || entry.valueSize === 0) {
     if (cb) cb();
     return;
   }
