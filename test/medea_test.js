@@ -473,7 +473,7 @@ describe('Medea#open() when there are missing hint files', function () {
     });
   });
 
-  it('should pass with leading ./ in directory name', function (done) {
+  it('should pass with leading ./ in directory name and no hint file', function (done) {
     var directory = './test/tmp/medea_test';
     var db1 = medea({});
     require('rimraf')(directory, function() {
@@ -500,4 +500,30 @@ describe('Medea#open() when there are missing hint files', function () {
       });
     });
   });
+
+  it('should pass with leading ./ in directory name', function (done) {
+    var directory = './test/tmp/medea_test';
+    var db1 = medea({});
+    require('rimraf')(directory, function() {
+      db1.open(directory, function(err) {
+        assert(!err);
+        db1.put('hello', 'world', function(err) {
+          assert(!err);
+          db1.close(function(err) {
+            assert(!err);
+            var db2 = medea({});
+            db2.open(directory, function(err) {
+              assert(!err);
+              db2.get('hello', function(err, val) {
+                assert(!err);
+                assert.equal(val.toString(), 'world');
+                done();
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+
 });
