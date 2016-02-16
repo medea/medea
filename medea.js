@@ -195,7 +195,7 @@ Medea.prototype._validateFiles = function (cb) {
           rimraf(file, function(err) {
             count++;
             if (files.length === count) {
-	            if (err.code === 'EPERM' && process.platform === 'win32') {
+	            if (err && err.code === 'EPERM' && process.platform === 'win32') {
 	              cb(null, validFiles);
 	            } else {
                 cb(err,validFiles);

@@ -28,8 +28,14 @@ var destroy = function (directory, cb) {
           return path.join(directory, fileName);
         })
 
-      rimraf(directory, function (err) {
-        cb(err && err.code !== 'ENOTEMPTY' ? err : undefined);
+      async.forEach(files, rimraf, function (err) {
+        if (err) {
+          return cb(err);
+        }
+
+        fs.rmdir(directory, function (err) {
+          cb(err && err.code !== 'ENOTEMPTY' ? err : undefined);
+        });
       });
     });
   });
