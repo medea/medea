@@ -386,12 +386,15 @@ describe('Medea', function() {
 });
 
 describe('Medea#open() when there are empty hint & data-files', function () {
+  var db;
   before(function (done) {
     require('rimraf')(directory, function () {
       fs.mkdir(directory, function () {
-        fs.open(directory + '/4.medea.data', 'w', function (err, fd) {
+        fs.open(path.join(directory, '4.medea.data'), 'w', function (err, fd) {
+          assert(!err);
           fs.close(fd, function () {
-            fs.open(directory + '/4.medea.hint', 'w', function (err, fd ) {
+            fs.open(path.join(directory, '4.medea.hint'), 'w', function (err, fd ) {
+              assert(!err);
               fs.close(fd, function () {
                 db = medea({});
                 db.open(directory, done);

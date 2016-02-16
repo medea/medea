@@ -71,8 +71,10 @@ describe('Medea.destroy', function() {
 
     it('deletes the folder', function (done) {
       medea.destroy(directory, function () {
-        assert.equal(fs.existsSync(directory), false);
-        done();
+        fs.stat(directory, function(err, stat) {
+          assert(!err);
+          done();
+        });
       });
     });
   });
@@ -94,18 +96,19 @@ describe('Medea.destroy', function() {
 });
 
 describe('Medea#destroy', function () {
-  var db;
-
   describe('initialized and closed db', function () {
     it('deletes the folder', function (done) {
+      var db;
       rimraf(directory, function () {
         db = medea();
         db.open(directory, function () {
           db.put('beep', 'boop', function () {
             db.close(function() {
               db.destroy(function () {
-                assert.equal(fs.existsSync(directory), false);
-                done();
+                fs.stat(directory, function(err, stat) {
+                  assert(!err);
+                  done();
+                });
               });
             });
           });
