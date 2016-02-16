@@ -1,5 +1,6 @@
 var assert = require('assert');
 var fs = require('fs');
+var path = require('path');
 
 var rimraf = require('rimraf');
 
@@ -70,10 +71,21 @@ describe('Medea.destroy', function() {
     });
 
     it('deletes the folder', function (done) {
-      medea.destroy(directory, function () {
-        fs.stat(directory, function(err, stat) {
-          assert(!err);
-          done();
+      var dir = directory + 'deletes_folder';
+      rimraf(dir, function () {
+        var db = medea();
+        db.open(dir, function() {
+          db.put('beep', 'boop', function () {
+            db.close(function() {
+              fs.writeFileSync(path.join(directory, 'medea.lock'), '123')
+              medea.destroy(dir, function (err) {
+                fs.stat(dir, function(err, stat) {
+                  assert(err);
+                  done();
+                });
+              });
+            });
+          });
         });
       });
     });
@@ -99,14 +111,15 @@ describe('Medea#destroy', function () {
   describe('initialized and closed db', function () {
     it('deletes the folder', function (done) {
       var db;
-      rimraf(directory, function () {
+      var dir = directory + 'initialize_and_close';
+      rimraf(dir, function () {
         db = medea();
-        db.open(directory, function () {
+        db.open(dir, function () {
           db.put('beep', 'boop', function () {
             db.close(function() {
               db.destroy(function () {
-                fs.stat(directory, function(err, stat) {
-                  assert(!err);
+                fs.stat(dir, function(err, stat) {
+                  assert(err);
                   done();
                 });
               });
