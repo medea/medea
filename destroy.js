@@ -1,5 +1,6 @@
 var fs = require('fs');
 var path = require('path');
+var rimraf = require('rimraf');
 
 var async = require('async');
 var lockFile = require('pidlockfile');
@@ -27,14 +28,8 @@ var destroy = function (directory, cb) {
           return path.join(directory, fileName);
         })
 
-      async.forEach(files, fs.unlink, function (err) {
-        if (err) {
-          return cb(err);
-        }
-
-        fs.rmdir(directory, function (err) {
-          cb(err && err.code !== 'ENOTEMPTY' ? err : undefined);
-        });
+      rimraf(directory, function (err) {
+        cb(err && err.code !== 'ENOTEMPTY' ? err : undefined);
       });
     });
   });

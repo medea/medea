@@ -6,6 +6,7 @@ var lockFile = require('pidlockfile');
 var timestamp = require('monotonic-timestamp');
 var async = require('async');
 var Map = global.Map || require('es6-map');
+var rimraf = require('rimraf');
 var constants = require('./constants');
 var fileops = require('./fileops');
 var DataBuffer = require('./data_buffer');
@@ -190,11 +191,15 @@ Medea.prototype._validateFiles = function (cb) {
           if (files.length === count) {
             cb(null, validFiles);
           }
-        } else if (stat && stat.size === 0 || (err && err.code === 'EPERM')) { // Windows EPERM issue: https://github.com/medea/medea/issues/51
-          fs.unlink(file, function(err) {
+        } else if (stat && stat.size === 0 || (err && err.code === 'EPERM' && process.platform === 'win32')) { // Windows EPERM issue: https://github.com/medea/medea/issues/51
+          rimraf(file, function(err) {
             count++;
             if (files.length === count) {
-              cb(err, validFiles);
+	            if (err.code === 'EPERM' && process.platform === 'win32') {
+	              cb(null, validFiles);
+	            } else {
+                cb(err,validFiles);
+              }
             }
           });
         } else if (err) {
