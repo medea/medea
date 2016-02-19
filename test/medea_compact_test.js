@@ -286,7 +286,7 @@ describe('Medea#compact', function() {
             assert(!err);
             db1.close(function(err) {
               assert(!err);
-              fs.unlink(directory + '/1.medea.hint', function() {
+              rimraf(directory + '/1.medea.hint', function() {
                 var db2 = medea({});
                 db2.open(directory, function(err) {
                   assert(!err);
@@ -320,18 +320,22 @@ describe('Medea#compact', function() {
               db2.open(directory, function(err) {
                 assert(!err);
 
-                var fds = [];
-                for (var i = 10; i < 15; i++) {
-                  var fd = fs.openSync(path.join(directory, i + '.medea.hint'), 'w');
-                  fds.push(fd);
+
+                if (process.platform !== 'win32') {
+                  // prevent windows from erroring due to in-progress I/O completion state.
+                  var fds = [];
+                  for (var i = 10; i < 15; i++) {
+                    var fd = fs.openSync(path.join(directory, i + '.medea.hint'), 'w');
+                    fds.push(fd);
+                  }
+
+                  fds.forEach(function(fd) {
+                    fs.closeSync(fd);
+                  });
+
+                  var files = fs.readdirSync(directory);
+                  assert.equal(files.length, 10);
                 }
-
-                fds.forEach(function(fd) {
-                  fs.closeSync(fd);
-                });
-
-                var files = fs.readdirSync(directory);
-                assert.equal(files.length, 10);
 
                 db2.compact(function(err) {
                   assert(!err);
