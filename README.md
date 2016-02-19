@@ -9,7 +9,8 @@ A persistent key-value storage library.
 * Supports atomic batch writes.
 * Allows snapshots for consistent views of data.
 
-[![Build Status](https://api.travis-ci.org/medea/medea.svg?branch=master)](https://travis-ci.org/medea/medea)
+[![Build Status](https://api.travis-ci.org/medea/medea.svg?branch=master)](https://travis-ci.org/medea/medea)  [![Build status](https://ci.appveyor.com/api/projects/status/cim1lbhjdxn33mfh/branch/master?svg=true)](https://ci.appveyor.com/project/kevinswiber/medea/branch/master)
+
 
 ## Contents
 

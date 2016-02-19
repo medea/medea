@@ -1,6 +1,7 @@
 var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 var path = require('path');
+var rimraf = require('rimraf');
 
 var async = require('async');
 var crc32 = require('buffer-crc32');
@@ -114,13 +115,22 @@ Compactor.prototype._cleanUpDanglingHintFiles = function(cb) {
         return;
       }
 
-      fs.unlink(diff[i], function(err) {
-        if (err) {
-          cb(err);
+      var filename = diff[i];
+
+      fs.stat(filename, function(err) {
+        if (err && err.code === 'EPERM' && process.platform === 'win32') {
+          unlink(++i);
           return;
         }
 
-        unlink(++i);
+        rimraf(filename, function(err) {
+          if (err) {
+            cb(err);
+            return;
+          }
+
+          unlink(++i);
+        });
       });
     }
 
@@ -210,12 +220,12 @@ Compactor.prototype._compactFile = function(file, cb) {
           return cb(err);
         }
 
-        fs.unlink(file.filename, function (err) {
+        rimraf(file.filename, function (err) {
           if (err) {
             return cb(err);
           }
 
-          fs.unlink(file.filename.replace('.data', '.hint'), function(err) {
+          rimraf(file.filename.replace('.data', '.hint'), function(err) {
             if (err && err.code !== 'ENOENT') {
               return cb(err);
             }
