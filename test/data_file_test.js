@@ -1,3 +1,4 @@
+require('setimmediate');
 var assert = require('assert');
 var fs = require('fs');
 var DataFile = require('../data_file');
