@@ -41,10 +41,8 @@ describe('DataFile', function() {
 
     it('elevates hint file open errors', function(done) {
       var coreOpen = fs.open;
-      var counter = 0;
       fs.open = function(filename, flag, mode, cb) {
-        counter++;
-        if (counter === 2) {
+        if (/hint$/.test(filename)) {
           setImmediate(function () {
             cb(new Error('OHNOES!'));
           });
