@@ -22,6 +22,7 @@
     "mkdirp": "^0.5.0",
     "monotonic-timestamp": "0.0.8",
     "pidlockfile": "^1.1.1",
+    "rimraf": "~2.2.2",
     "run-parallel": "^1.0.0"
   },
   "readmeFilename": "README.md",
@@ -30,8 +31,7 @@
     "example": "example"
   },
   "devDependencies": {
-    "mocha": "~1.12.0",
-    "rimraf": "~2.2.2"
+    "mocha": "~1.12.0"
   },
   "keywords": [
     "key",
