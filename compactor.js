@@ -1,3 +1,4 @@
+require('setimmediate');
 var EventEmitter = require('events').EventEmitter;
 var fs = require('fs');
 var path = require('path');

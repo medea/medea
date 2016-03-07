@@ -1,5 +1,8 @@
 language: node_js
+before_install:
+  - "if node --version | fgrep -q 'v0.8'; then npm install -g npm@1.4.3; fi"
 node_js:
+  - "0.8"
   - "0.10"
   - "0.12"
   - "4.0"
